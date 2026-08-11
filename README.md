@@ -8,6 +8,12 @@
 A professional monitoring application for academic recruitment notices in Türkiye's Official Gazette. It discovers regular and supplemental issues, optionally uses Gemini to extract research-assistant vacancies, and sends configurable email alerts.
 
 The repository keeps two independently deployable products: a minimal-infrastructure **Apps Script Edition** and a hosted **Vercel Private Edition**. Both provide a polished dashboard, optional AI, flexible preferences, multiple recipients, relevance filters, and operational history.
+<img width="2493" height="1234" alt="image" src="https://github.com/user-attachments/assets/5e42408d-dc5b-42b4-95c1-c0c687177c38" />
+
+<img width="2526" height="1229" alt="image" src="https://github.com/user-attachments/assets/a112024c-e217-4d82-b90a-81e6ccea0856" />
+
+<img width="2061" height="780" alt="image" src="https://github.com/user-attachments/assets/b89eb51d-bf07-4757-9c9c-210d1874d41a" />
+
 
 ## Choose an edition
 
