@@ -11,10 +11,12 @@ Thank you for helping improve Turkish Official Gazette Academic Alerts.
 ## Development workflow
 
 1. Fork the repository and create a descriptive branch.
-2. Update `Code.gs`, `WebApp.gs`, or `Index.html` and the relevant fixtures or tests.
-3. Run `npm test`.
-4. Confirm that new source URLs remain restricted to the Official Gazette domain.
-5. Open a pull request with a short summary, test evidence, and any operational impact.
+2. Keep Apps Script work at the repository root and Vercel work under `apps/vercel`; do not couple the two runtimes.
+3. Update the relevant fixtures, migrations, tests, and deployment documentation.
+4. Run `npm test` for Apps Script changes.
+5. For Vercel changes, run `npm test`, `npm run typecheck`, and `npm run build` from `apps/vercel`.
+6. Confirm that new source URLs remain restricted to the Official Gazette domain.
+7. Open a pull request with a short summary, test evidence, migration notes, and any operational impact.
 
 ## Code guidelines
 
@@ -27,6 +29,9 @@ Thank you for helping improve Turkish Official Gazette Academic Alerts.
 - Preserve an explicit manual-review path whenever analysis may be incomplete.
 - Escape untrusted values before rendering HTML email.
 - Add regression fixtures for changes to Official Gazette parsing.
+- Preserve behavioral parity between editions for exact-date validation, supplemental issues, candidate discovery, AI fallback, and official-link handling.
+- Keep Vercel Route Handlers authenticated, same-origin for mutations, secret-safe, bounded, and idempotent.
+- Make database migrations backward-compatible with the version being rolled back whenever practical.
 
 ## Pull requests
 

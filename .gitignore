@@ -10,6 +10,9 @@
 # Node and test output
 node_modules/
 coverage/
+.next/
+.vercel/
+*.tsbuildinfo
 
 # Editors and operating systems
 .idea/

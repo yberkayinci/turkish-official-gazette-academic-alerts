@@ -3,26 +3,41 @@
 [![Tests](https://github.com/yberkayinci/turkish-official-gazette-academic-alerts/actions/workflows/test.yml/badge.svg)](https://github.com/yberkayinci/turkish-official-gazette-academic-alerts/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Google Apps Script](https://img.shields.io/badge/Google%20Apps%20Script-V8-4285F4)](https://script.google.com/)
+[![Vercel](https://img.shields.io/badge/Vercel-Private%20Edition-000000)](https://vercel.com/)
 
-A private, serverless monitoring workspace for academic recruitment notices in Türkiye's Official Gazette. It discovers regular and supplemental issues, optionally uses Gemini to extract research-assistant vacancies, and sends configurable email alerts.
+A professional monitoring application for academic recruitment notices in Türkiye's Official Gazette. It discovers regular and supplemental issues, optionally uses Gemini to extract research-assistant vacancies, and sends configurable email alerts.
 
-Version 2 adds a polished web dashboard, optional AI, flexible scheduling, multiple recipients, relevance filters, activity history, and safe maintenance controls.
+The repository keeps two independently deployable products: a minimal-infrastructure **Apps Script Edition** and a hosted **Vercel Private Edition**. Both provide a polished dashboard, optional AI, flexible preferences, multiple recipients, relevance filters, and operational history.
 
-## Product boundary
+## Choose an edition
 
-This repository is a **self-hosted, single-tenant Apps Script application**. Each user deploys a private copy under their own Google account and owns their own configuration, Gemini key, email quota, and triggers.
+| | Apps Script Edition | Vercel Private Edition |
+| --- | --- | --- |
+| Best for | The easiest private Gmail workflow | A hosted, extensible private installation |
+| Location | Repository root | `apps/vercel` |
+| Email | Google MailApp | Resend |
+| State | Script Properties | Neon Postgres |
+| Authentication | Google account; `Only myself` | Single-owner secure session |
+| Scheduling | Apps Script trigger | Daily on Hobby; hourly gate on Pro |
+| Infrastructure | Google account only | Vercel, Neon, and Resend |
 
-It must be deployed with:
+Read the full [edition comparison](docs/EDITIONS.md).
+
+### Security boundary
+
+Both editions are **single-tenant**. Each installation has one owner and its own settings, secrets, scheduler, and provider quotas.
+
+The Apps Script Edition must be deployed with:
 
 - **Execute as:** Me
 - **Who has access:** Only myself
 
-Do not expose this version as an anonymous or shared multi-user web app. A centralized commercial SaaS requires separate identity, database, secrets, billing, and scheduler infrastructure. See [Commercial architecture](docs/COMMERCIALIZATION.md).
+The Vercel Private Edition must retain application authentication, protected Cron requests, encrypted credentials, and a private administrator password. Do not turn either edition into an anonymous or shared multi-user application. A centralized commercial SaaS requires tenant isolation, recipient verification, billing, abuse controls, and lifecycle operations. See [Commercial architecture](docs/COMMERCIALIZATION.md).
 
 ## Dashboard capabilities
 
 - Private, responsive setup and operations dashboard.
-- Primary recipient plus two optional additional recipients delivered by BCC for address privacy.
+- Primary recipient plus two optional additional recipients, delivered privately by BCC in Apps Script or as separate messages in Vercel.
 - Custom sender name and delivery policy.
 - Monitoring every 1, 2, 3, 4, 6, 8, 12, or 24 hours.
 - Configurable active-hours window in `Europe/Istanbul`.
@@ -40,7 +55,7 @@ Do not expose this version as an anonymous or shared multi-user web app. A centr
 - Correction, cancellation, uncertainty, and headline preferences.
 - Test email and Gemini connection actions.
 - Remaining email quota, scheduler health, last-run summary, and recent activity.
-- Explicit controls for cache, processed history, scheduler repair, and API-key removal.
+- Explicit Apps Script controls for cache, processed history, scheduler repair, and API-key removal.
 
 ## Monitoring capabilities
 
@@ -51,9 +66,9 @@ Do not expose this version as an anonymous or shared multi-user web app. A centr
 - Uses Gemini structured output to extract institution, unit, department, count, grade, ALES, language requirement, special conditions, deadline, method, evidence, and source page.
 - Preserves official source links and never trusts AI-generated URLs.
 - Degrades to manual-review links when AI, parsing, quota, document-size, or execution-time limits prevent a reliable result.
-- Deduplicates processed issues, caches document analysis, and checks the previous day for late publications.
+- Deduplicates processed issues and checks the previous day for late publications; the Apps Script Edition also caches document analysis.
 
-## Architecture
+## Apps Script architecture
 
 ```mermaid
 flowchart LR
@@ -80,7 +95,7 @@ Secrets remain separate from non-secret preferences:
 - `RG_SETTINGS_V2`: versioned non-secret preferences.
 - Runtime state, activity, processed publications, and analysis cache use independent properties.
 
-## Requirements
+## Apps Script requirements
 
 - A Google account.
 - A private Google Apps Script project.
@@ -88,7 +103,7 @@ Secrets remain separate from non-secret preferences:
 
 > Google AI Pro and the Gemini Developer API are separate products. An AI Pro subscription does not remove the need for a Developer API key. API usage follows the associated project's free or paid quota. See [Gemini API billing](https://ai.google.dev/gemini-api/docs/billing).
 
-## Quick start
+## Apps Script quick start
 
 1. Open [Google Apps Script](https://script.google.com/) and create a new project.
 2. Add the repository files to the project:
@@ -107,6 +122,31 @@ Secrets remain separate from non-secret preferences:
 The dashboard creates exactly one hourly scheduler and enforces the chosen interval and active window in code. Apps Script trigger times are approximate.
 
 For a complete production checklist, upgrades, and troubleshooting, read [Deployment guide](docs/DEPLOYMENT.md).
+
+## Vercel Private Edition
+
+The hosted edition lives in [`apps/vercel`](apps/vercel) and keeps the Apps Script files unchanged. It provides:
+
+- A responsive, password-protected dashboard.
+- Neon Postgres state with job leases and delivery idempotency.
+- Encrypted dashboard-managed Gemini credentials with environment-variable fallbacks.
+- Resend transactional email from a verified domain.
+- A Hobby-safe daily Cron profile and a Pro hourly profile with runtime interval gating.
+- Server-side Official Gazette allowlisting, redirect validation, size limits, and manual-review fallback.
+
+### Vercel quick start
+
+1. Import this repository into Vercel.
+2. Set **Root Directory** to `apps/vercel`.
+3. Connect a Neon Postgres database and Resend account through the Vercel Marketplace.
+4. Add the required environment variables from [`apps/vercel/.env.example`](apps/vercel/.env.example).
+5. Install dependencies and run `npm run db:migrate` from `apps/vercel`.
+6. Deploy, sign in, complete the dashboard, send a test email, and run the first check in Keyword mode.
+7. Enable monitoring after storage, email, and Cron health are ready.
+
+Vercel Hobby supports native Cron only once per day. Set the Pro Cron profile for sub-daily monitoring. A verified Resend domain is required for production recipients. Follow the complete [Vercel deployment guide](docs/VERCEL_DEPLOYMENT.md).
+
+> Do not enable both editions for the same recipients unless duplicate alerts are intentional. Their processed-publication state does not synchronize.
 
 ## Backward compatibility
 
@@ -150,6 +190,8 @@ The legacy `setup()` function remains available, but new installations should us
 - Email tests can target only saved recipients, preventing the endpoint from becoming an arbitrary mail relay.
 - Only `https://www.resmigazete.gov.tr` source links are rendered in reports.
 - Official Gazette documents are public. Do not add CVs or personal profiles without reviewing the selected Gemini tier's data-use terms.
+- In the Vercel Edition, keep database, session, encryption, Cron, Resend, and fallback Gemini secrets in server-only environment variables. Dashboard-managed provider keys are encrypted before storage and are never returned to the browser.
+- Vercel Cron may overlap or be delivered more than once; database leases, unique delivery records, and provider idempotency keys are required controls, not optional optimizations.
 
 Read [SECURITY.md](SECURITY.md) before deployment.
 
@@ -178,10 +220,20 @@ Relevant documentation:
 
 ## Development
 
-Production uses no package dependency or third-party UI CDN. Node.js is required only for local tests.
+The Apps Script production runtime uses no package dependency or third-party UI CDN. Node.js is required for local tests:
 
 ```bash
 npm test
+```
+
+The Vercel Edition is an independent Next.js workspace:
+
+```bash
+cd apps/vercel
+npm ci
+npm test
+npm run typecheck
+npm run build
 ```
 
 The test suite covers:

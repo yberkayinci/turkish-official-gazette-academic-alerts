@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Private single-administrator Vercel Edition under `apps/vercel`.
+- Neon Postgres persistence, encrypted provider credentials, database job leases, and delivery idempotency.
+- Resend transactional email and plan-aware Vercel Cron profiles.
+- Independent Vercel dashboard, authentication, health, activity, settings, and monitoring APIs.
+- Dual-edition comparison, Vercel deployment, and hosted-security documentation.
+
+### Changed
+
+- Repositioned the repository as two independent single-tenant deployment options while preserving the existing Apps Script files and upgrade path.
+
 ## [2.0.0] - 2026-08-11
 
 ### Added

@@ -1,6 +1,6 @@
 # Commercial architecture
 
-Official Gazette Monitor 2 is production-oriented **self-hosted software**, not a centralized multi-user SaaS backend.
+Official Gazette Monitor is production-oriented **single-tenant software**, not a centralized multi-user SaaS backend. The repository provides an Apps Script Edition and a Vercel Private Edition; each installation still has one owner.
 
 ## Sellable model supported by this repository
 
@@ -12,6 +12,16 @@ A practical first commercial offering is a managed single-tenant installation:
 - Onboarding, configuration, updates, and support can be packaged as a service.
 
 This model keeps infrastructure cost low and avoids storing customers' Gmail credentials. It does not provide centralized billing, organization management, or fleet-wide operations.
+
+An alternative managed offering can use the Vercel Private Edition:
+
+- Each customer receives a separate Vercel project and database boundary.
+- The dashboard is protected by that customer's administrator credential.
+- Customer-entered provider keys are encrypted with an installation-specific key.
+- Resend, Gemini, database, and Vercel usage remain attributable to that installation.
+- Updates can be delivered through reviewed GitHub releases and controlled database migrations.
+
+This provides stronger hosting, delivery records, and observability than Apps Script, but it is still not shared multi-tenant SaaS. Vercel Pro is the appropriate plan for commercial use and sub-daily native Cron schedules.
 
 ## Why a shared Apps Script deployment is unsafe
 
@@ -48,7 +58,7 @@ Minimum production components:
 - Rate, budget, and abuse controls for Gemini and outbound mail.
 - Automated deployments, migrations, backups, and rollback.
 
-Cloud Run Jobs or equivalent managed workers, a managed scheduler, Secret Manager, a relational database, and an email provider are a reasonable next architecture. The deterministic parsing, Gemini schema, official-link validation, and email report logic in this repository can be extracted into that backend.
+The Vercel Private Edition supplies an initial hosted control plane, relational state, protected scheduler, and transactional email. A public SaaS must extend it with tenant-aware authentication and authorization, row-level isolation, queues/workflows, verified recipients, bounce handling, billing, and deletion/export workflows. The deterministic parsing, Gemini schema, official-link validation, and report logic can be reused.
 
 ## Suggested commercial roadmap
 
@@ -61,7 +71,7 @@ Cloud Run Jobs or equivalent managed workers, a managed scheduler, Secret Manage
 
 ### Phase 2 — Hosted beta
 
-- Authentication and tenant database.
+- Invite-only authentication and tenant-isolated database records.
 - One notification channel and simple plans.
 - Central monitoring, rate limits, and audit logs.
 - Invite-only customers while reliability is measured.
