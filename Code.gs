@@ -2,7 +2,7 @@
  * Turkish Official Gazette Academic Alerts
  *
  * A serverless Google Apps Script monitor for Türkiye's Official Gazette.
- * It lists each issue's headlines, uses Gemini to analyze recruitment PDFs,
+ * It lists each issue's headlines, can use Gemini to analyze recruitment PDFs,
  * and emails structured research-assistant vacancy alerts without storing a
  * Gmail password.
  *
@@ -10,11 +10,10 @@
  */
 
 const RG_CONFIG = Object.freeze({
+  APP_VERSION: '2.0.0',
   TIME_ZONE: 'Europe/Istanbul',
   BASE_URL: 'https://www.resmigazete.gov.tr',
   GEMINI_MODEL: 'gemini-3.6-flash',
-  CHECK_HOURS: [6, 9, 12, 15, 18, 21, 23],
-  LAST_CHECK_HOUR: 23,
   MAX_MUKERRER: 999,
   MAX_ACADEMIC_DOCUMENTS: 30,
   RUN_TIME_BUDGET_MS: 260000,
@@ -29,16 +28,49 @@ const RG_CONFIG = Object.freeze({
 
 const RG_PROPERTY_KEYS = Object.freeze({
   API_KEY: 'GEMINI_API_KEY',
+  API_KEY_VERIFIED_HASH: 'RG_GEMINI_KEY_VERIFIED_HASH_V1',
   RECIPIENT_EMAIL: 'RECIPIENT_EMAIL',
+  SETTINGS: 'RG_SETTINGS_V2',
+  ACTIVITY: 'RG_ACTIVITY_V1',
+  LAST_RUN: 'RG_LAST_RUN_V1',
+  LAST_SCHEDULED_AT: 'RG_LAST_SCHEDULED_AT_V1',
   PROCESSED: 'RG_PROCESSED_PUBLICATIONS_V1',
   CACHE_INDEX: 'RG_ANALYSIS_CACHE_INDEX_V1',
   LAST_PROBLEM_NOTICE: 'RG_LAST_PROBLEM_NOTICE_V1',
 });
 
+const RG_ALLOWED_INTERVALS = Object.freeze([1, 2, 3, 4, 6, 8, 12, 24]);
+const RG_ALLOWED_DELIVERY_POLICIES = Object.freeze(['all_issues', 'matches_only']);
+const RG_DEFAULT_SETTINGS = Object.freeze({
+  version: 2,
+  monitoringEnabled: true,
+  checkIntervalHours: 3,
+  activeStartHour: 6,
+  activeEndHour: 23,
+  includeYesterday: true,
+  includeSupplements: true,
+  aiMode: 'off',
+  summarizeHeadlines: true,
+  customModel: '',
+  deliveryPolicy: 'matches_only',
+  senderName: 'Official Gazette Monitor',
+  additionalRecipients: [],
+  notifyErrors: true,
+  notifyNoPublication: false,
+  includeHeadlines: true,
+  requiredKeywords: [],
+  excludedKeywords: [],
+  preferredInstitutions: [],
+  includeCorrections: true,
+  includeCancellations: true,
+  includeUncertain: true,
+});
+
 /** Run once to validate configuration, create triggers, and send a test email. */
 function setup() {
   validateConfiguration_();
-  testGeminiConnection_();
+  const settings = getAppSettings_();
+  if (settings.aiEnabled) testGeminiConnection_();
   refreshTriggers();
 
   MailApp.sendEmail({
@@ -49,8 +81,10 @@ function setup() {
       'Scheduled checks are active. Run checkTodayNow once from Apps Script ' +
       'to generate the first live report immediately.',
     htmlBody: buildSetupSuccessEmail_(),
-    name: 'Official Gazette Alerts',
+    name: settings.senderName,
   });
+
+  logActivity_('setup_completed', 'success', 'Setup completed and monitoring was configured.');
 
   const message = 'Setup complete. Run checkTodayNow to generate the first report.';
   console.log(message);
@@ -60,21 +94,35 @@ function setup() {
 /** Main entry point called by installable time-driven triggers. */
 function scheduledCheck() {
   return withScriptLock_(function () {
+    const startedAt = new Date();
     try {
+      const settings = getAppSettings_();
+      if (!settings.monitoringEnabled) {
+        return { ok: true, skipped: true, message: 'Monitoring is paused.' };
+      }
+      const scheduleDecision = shouldRunScheduledNow_(startedAt, settings);
+      if (!scheduleDecision.due) {
+        return { ok: true, skipped: true, message: scheduleDecision.message };
+      }
       validateConfiguration_();
-      const now = new Date();
       const runContext = createRunContext_();
-      const today = monitorDate_(now, false, false, runContext);
-      const yesterday = monitorDate_(
-        new Date(now.getTime() - 86400000),
-        false,
-        true,
-        runContext
-      );
-      return { ok: true, today: today, yesterday: yesterday };
+      const today = monitorDate_(startedAt, false, false, runContext);
+      const yesterday = settings.includeYesterday
+        ? monitorDate_(
+            new Date(startedAt.getTime() - 86400000),
+            false,
+            true,
+            runContext
+          )
+        : null;
+      markScheduledRun_(startedAt);
+      const result = { ok: true, today: today, yesterday: yesterday };
+      recordRunResult_('scheduled', startedAt, result, null);
+      return result;
     } catch (error) {
       console.error(error && error.stack ? error.stack : String(error));
-      notifyProblemIfLate_(new Date(), error);
+      recordRunResult_('scheduled', startedAt, null, error);
+      notifyProblemIfLate_(startedAt, error);
       throw new Error('Scheduled check failed: ' + safeErrorMessage_(error));
     }
   });
@@ -83,8 +131,10 @@ function scheduledCheck() {
 /** Check today's issue now without resending an already processed issue. */
 function checkTodayNow() {
   return withScriptLock_(function () {
+    const startedAt = new Date();
     validateConfiguration_();
-    const result = monitorDate_(new Date(), false, false, createRunContext_());
+    const result = monitorDate_(startedAt, false, false, createRunContext_());
+    recordRunResult_('manual', startedAt, result, null);
     console.log(JSON.stringify(result, null, 2));
     return result;
   });
@@ -93,8 +143,10 @@ function checkTodayNow() {
 /** Reanalyze and resend today's issue, bypassing processed state and AI cache. */
 function resendToday() {
   return withScriptLock_(function () {
+    const startedAt = new Date();
     validateConfiguration_();
-    const result = monitorDate_(new Date(), true, false, createRunContext_());
+    const result = monitorDate_(startedAt, true, false, createRunContext_());
+    recordRunResult_('manual_resend', startedAt, result, null);
     console.log(JSON.stringify(result, null, 2));
     return result;
   });
@@ -103,16 +155,18 @@ function resendToday() {
 /** Delete and recreate the scheduled checks. */
 function refreshTriggers() {
   removeTriggers();
-  RG_CONFIG.CHECK_HOURS.forEach(function (hour) {
-    ScriptApp.newTrigger('scheduledCheck')
-      .timeBased()
-      .atHour(hour)
-      .nearMinute(15)
-      .everyDays(1)
-      .inTimezone(RG_CONFIG.TIME_ZONE)
-      .create();
-  });
-  console.log('Scheduled check hours: ' + RG_CONFIG.CHECK_HOURS.join(', '));
+  const settings = getAppSettings_();
+  if (!settings.monitoringEnabled) {
+    console.log('Monitoring is paused; no trigger was created.');
+    return 0;
+  }
+  ScriptApp.newTrigger('scheduledCheck').timeBased().everyHours(1).create();
+  console.log(
+    'Hourly scheduler created; monitoring runs every ' +
+      settings.checkIntervalHours +
+      ' hour(s) during the active window.'
+  );
+  return 1;
 }
 
 /** Stop all scheduled checks created by this project. */
@@ -128,10 +182,15 @@ function removeTriggers() {
 /** Print a safe configuration and processing status summary. */
 function showStatus() {
   const props = PropertiesService.getScriptProperties();
+  const settings = getAppSettings_();
   const info = {
-    recipient: getRecipientEmail_(),
-    model: RG_CONFIG.GEMINI_MODEL,
+    version: RG_CONFIG.APP_VERSION,
+    recipientConfigured: Boolean(props.getProperty(RG_PROPERTY_KEYS.RECIPIENT_EMAIL)),
+    additionalRecipientCount: settings.additionalRecipients.length,
+    model: settings.aiEnabled ? getGeminiModel_() : 'AI disabled',
     timeZone: RG_CONFIG.TIME_ZONE,
+    monitoringEnabled: settings.monitoringEnabled,
+    checkIntervalHours: settings.checkIntervalHours,
     apiKeyConfigured: Boolean(props.getProperty(RG_PROPERTY_KEYS.API_KEY)),
     triggerCount: ScriptApp.getProjectTriggers().filter(function (trigger) {
       return trigger.getHandlerFunction() === 'scheduledCheck';
@@ -145,12 +204,17 @@ function showStatus() {
 
 function monitorDate_(date, forceResend, suppressMissingNotice, runContext) {
   runContext = runContext || createRunContext_();
+  const settings = getAppSettings_();
   const dateParts = getDateParts_(date);
   const publications = discoverPublications_(dateParts);
 
   if (!publications.length) {
     const hour = Number(Utilities.formatDate(new Date(), RG_CONFIG.TIME_ZONE, 'H'));
-    if (!suppressMissingNotice && hour >= RG_CONFIG.LAST_CHECK_HOUR) {
+    if (
+      settings.notifyNoPublication &&
+      !suppressMissingNotice &&
+      hour >= settings.activeEndHour
+    ) {
       notifyNoPublicationOnce_(dateParts);
     }
     return {
@@ -167,6 +231,7 @@ function monitorDate_(date, forceResend, suppressMissingNotice, runContext) {
   );
   let sent = 0;
   let skipped = 0;
+  let filtered = 0;
 
   publications.forEach(function (publication) {
     const publicationKey = shortHash_(publication.pdfUrl);
@@ -176,10 +241,14 @@ function monitorDate_(date, forceResend, suppressMissingNotice, runContext) {
     }
 
     const report = buildPublicationReport_(publication, runContext, forceResend);
-    sendPublicationEmail_(report);
+    if (shouldSendReport_(report, settings)) {
+      sendPublicationEmail_(report);
+      sent += 1;
+    } else {
+      filtered += 1;
+    }
     processed[publicationKey] = new Date().toISOString();
     saveJsonProperty_(RG_PROPERTY_KEYS.PROCESSED, pruneProcessedState_(processed));
-    sent += 1;
   });
 
   return {
@@ -188,6 +257,7 @@ function monitorDate_(date, forceResend, suppressMissingNotice, runContext) {
     found: publications.length,
     sent: sent,
     skipped: skipped,
+    filtered: filtered,
   };
 }
 
@@ -200,7 +270,9 @@ function discoverPublications_(dateParts) {
   if (normalResponse.ok) {
     const normal = parseIssuePage_(normalResponse.text, normalUrl, dateParts, 0);
     if (normal) publications.push(normal);
-    extraNumbers = discoverMukerrerNumbers_(normalResponse.text, normalUrl, dateParts);
+    if (getAppSettings_().includeSupplements) {
+      extraNumbers = discoverMukerrerNumbers_(normalResponse.text, normalUrl, dateParts);
+    }
   } else if (normalResponse.status !== 404) {
     throw new Error(
       'The Official Gazette daily page could not be read (HTTP ' + normalResponse.status + ').'
@@ -355,12 +427,27 @@ function parseIssuePage_(html, pageUrl, dateParts, mukerrerNumber) {
 }
 
 function buildPublicationReport_(publication, runContext, forceReanalysis) {
-  const academicCandidates = findAcademicCandidates_(publication);
-  const analyses = analyzeAcademicCandidates_(
-    academicCandidates,
-    runContext,
-    forceReanalysis
-  );
+  const settings = getAppSettings_();
+  const discoveredCandidates = findAcademicCandidates_(publication);
+  const academicCandidates = settings.aiMode === 'full'
+    ? discoveredCandidates
+    : discoveredCandidates.filter(function (candidate) {
+        return candidate.discoveryError || candidateMatchesKeywordMode_(candidate, settings);
+      });
+  const analyses = settings.aiMode === 'full'
+    ? analyzeAcademicCandidates_(academicCandidates, runContext, forceReanalysis)
+    : academicCandidates.map(function (candidate) {
+        return {
+          title: candidate.title,
+          url: candidate.url,
+          status: 'manual_review',
+          message: candidate.discoveryError
+            ? 'This source could not be parsed automatically; review it manually.'
+            : settings.aiMode === 'summary_only'
+              ? 'Headline AI is enabled, but notice PDFs are not classified in Summary-only mode.'
+              : 'Keyword mode does not read notice PDFs. Review this potential academic notice manually.',
+        };
+      });
   const positions = [];
   const reviewNeeded = [];
   const otherAcademic = [];
@@ -372,6 +459,7 @@ function buildPublicationReport_(publication, runContext, forceReanalysis) {
     }
     if (entry.analysis.positions.length) {
       entry.analysis.positions.forEach(function (position) {
+        if (!shouldIncludePosition_(position, settings, entry.analysis)) return;
         positions.push({
           sourceTitle: entry.title,
           sourceUrl: entry.url,
@@ -399,7 +487,8 @@ function buildPublicationReport_(publication, runContext, forceReanalysis) {
     publication,
     positions,
     reviewNeeded,
-    runContext
+    runContext,
+    settings
   );
   return {
     publication: publication,
@@ -408,6 +497,8 @@ function buildPublicationReport_(publication, runContext, forceReanalysis) {
     reviewNeeded: reviewNeeded,
     otherAcademic: otherAcademic,
     academicCandidateCount: academicCandidates.length,
+    analysisMode: settings.aiMode,
+    includeHeadlines: settings.includeHeadlines,
   };
 }
 
@@ -486,6 +577,60 @@ function isAcademicCandidateTitle_(title) {
   return /universite|rektor|yuksekogretim|yuksek ogretim|enstitu|akademi|fakulte|ogretim elemani|ogretim uyesi|arastirma gorevlisi/.test(
     value
   );
+}
+
+function candidateMatchesKeywordMode_(candidate, settings) {
+  const title = normalizeTurkish_(candidate.title);
+  if (!isAcademicCandidateTitle_(candidate.title)) return false;
+  if (containsAnyNormalized_(title, settings.excludedKeywords)) return false;
+  if (
+    settings.preferredInstitutions.length &&
+    !containsAnyNormalized_(title, settings.preferredInstitutions)
+  ) {
+    return false;
+  }
+  if (
+    settings.requiredKeywords.length &&
+    !containsAnyNormalized_(title, settings.requiredKeywords)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function shouldIncludePosition_(position, settings, analysis) {
+  if (position.status === 'corrected' && !settings.includeCorrections) return false;
+  if (position.status === 'cancelled' && !settings.includeCancellations) return false;
+  if ((analysis.uncertain || analysis.needsManualReview) && !settings.includeUncertain) return false;
+
+  const text = normalizeTurkish_([
+    position.university,
+    position.unit,
+    position.department,
+    position.field,
+    position.title,
+    position.specialConditions.join(' '),
+  ].join(' '));
+  if (containsAnyNormalized_(text, settings.excludedKeywords)) return false;
+  if (
+    settings.requiredKeywords.length &&
+    !containsAnyNormalized_(text, settings.requiredKeywords)
+  ) {
+    return false;
+  }
+  if (
+    settings.preferredInstitutions.length &&
+    !containsAnyNormalized_(normalizeTurkish_(position.university), settings.preferredInstitutions)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function containsAnyNormalized_(normalizedText, values) {
+  return (values || []).some(function (value) {
+    return normalizedText.indexOf(normalizeTurkish_(value)) !== -1;
+  });
 }
 
 function analyzeAcademicCandidates_(candidates, runContext, forceReanalysis) {
@@ -661,27 +806,32 @@ function academicAnalysisSchema_() {
 
 function normalizeAnalysis_(value) {
   const positions = Array.isArray(value && value.positions)
-    ? value.positions.map(function (position) {
+    ? value.positions.slice(0, 100).map(function (position) {
         return {
-          university: safeText_(position.university),
-          unit: safeText_(position.unit),
-          department: safeText_(position.department),
-          field: safeText_(position.field),
-          title: safeText_(position.title) || 'Research Assistant',
+          university: safeText_(position.university).slice(0, 300),
+          unit: safeText_(position.unit).slice(0, 300),
+          department: safeText_(position.department).slice(0, 300),
+          field: safeText_(position.field).slice(0, 300),
+          title: safeText_(position.title).slice(0, 120) || 'Research Assistant',
           status: ['new', 'corrected', 'cancelled'].indexOf(position.status) !== -1
             ? position.status
             : 'new',
-          count: Math.max(0, Number(position.count) || 0),
-          degree: safeText_(position.degree),
-          ales: safeText_(position.ales),
-          foreignLanguage: safeText_(position.foreign_language),
+          count: Math.min(10000, Math.max(0, Number(position.count) || 0)),
+          degree: safeText_(position.degree).slice(0, 80),
+          ales: safeText_(position.ales).slice(0, 300),
+          foreignLanguage: safeText_(position.foreign_language).slice(0, 300),
           specialConditions: Array.isArray(position.special_conditions)
-            ? position.special_conditions.map(safeText_).filter(Boolean).slice(0, 12)
+            ? position.special_conditions
+                .map(function (item) {
+                  return safeText_(item).slice(0, 400);
+                })
+                .filter(Boolean)
+                .slice(0, 12)
             : [],
-          applicationDeadline: safeText_(position.application_deadline),
-          applicationMethod: safeText_(position.application_method),
+          applicationDeadline: safeText_(position.application_deadline).slice(0, 100),
+          applicationMethod: safeText_(position.application_method).slice(0, 500),
           evidence: safeText_(position.evidence).slice(0, 700),
-          sourcePage: safeText_(position.source_page),
+          sourcePage: safeText_(position.source_page).slice(0, 50),
         };
       }).filter(function (position) {
         const normalizedTitle = normalizeTurkish_(position.title);
@@ -702,7 +852,8 @@ function normalizeAnalysis_(value) {
   };
 }
 
-function summarizeHeadlines_(publication, positions, reviewNeeded, runContext) {
+function summarizeHeadlines_(publication, positions, reviewNeeded, runContext, settings) {
+  settings = settings || getAppSettings_();
   const titles = publication.items.slice(0, RG_CONFIG.MAX_HEADLINES).map(function (item) {
     return item.title;
   });
@@ -714,16 +865,12 @@ function summarizeHeadlines_(publication, positions, reviewNeeded, runContext) {
     };
   }
 
-  if (!hasRunTimeForNetwork_(runContext || createRunContext_())) {
-    return {
-      bullets: [
-        'This issue contains ' + titles.length + ' published headline(s).',
-        positions.length
-          ? positions.length + ' research-assistant vacancy row(s) were detected.'
-          : 'No research-assistant vacancy was detected by the automated analysis.',
-      ],
-      notable: [],
-    };
+  if (
+    settings.aiMode === 'off' ||
+    !settings.summarizeHeadlines ||
+    !hasRunTimeForNetwork_(runContext || createRunContext_())
+  ) {
+    return buildDeterministicSummary_(titles.length, positions, reviewNeeded, settings.aiMode);
   }
 
   const prompt = [
@@ -753,31 +900,51 @@ function summarizeHeadlines_(publication, positions, reviewNeeded, runContext) {
     const result = callGeminiJson_([{ text: prompt }], schema);
     return {
       bullets: Array.isArray(result.bullets)
-        ? result.bullets.map(safeText_).filter(Boolean).slice(0, 6)
+        ? result.bullets
+            .map(function (item) {
+              return safeText_(item).slice(0, 500);
+            })
+            .filter(Boolean)
+            .slice(0, 6)
         : [],
       notable: Array.isArray(result.notable)
-        ? result.notable.map(safeText_).filter(Boolean).slice(0, 5)
+        ? result.notable
+            .map(function (item) {
+              return safeText_(item).slice(0, 500);
+            })
+            .filter(Boolean)
+            .slice(0, 5)
         : [],
     };
   } catch (error) {
     console.warn('The headline summary could not be generated: ' + safeErrorMessage_(error));
-    return {
-      bullets: [
-        'This issue contains ' + titles.length + ' published headline(s).',
-        positions.length
-          ? positions.length + ' research-assistant vacancy row(s) were detected.'
-          : 'No research-assistant vacancy was detected by the automated analysis.',
-      ],
-      notable: [],
-    };
+    return buildDeterministicSummary_(titles.length, positions, reviewNeeded, settings.aiMode);
   }
 }
 
-function callGeminiJson_(parts, schema) {
-  const apiKey = getGeminiApiKey_();
+function buildDeterministicSummary_(headlineCount, positions, reviewNeeded, aiMode) {
+  const bullets = ['This issue contains ' + headlineCount + ' published headline(s).'];
+  if (positions.length) {
+    bullets.push(positions.length + ' research-assistant vacancy row(s) were confirmed.');
+  } else if (reviewNeeded.length) {
+    bullets.push(
+      reviewNeeded.length +
+        ' potential academic notice(s) require manual review; no absence claim is being made.'
+    );
+  } else if (aiMode === 'full') {
+    bullets.push('No research-assistant vacancy was detected in the completed document analysis.');
+  } else {
+    bullets.push('PDF vacancy extraction is disabled; use the official links for verification.');
+  }
+  return { bullets: bullets, notable: [] };
+}
+
+function callGeminiJson_(parts, schema, apiKeyOverride, modelOverride) {
+  const apiKey = apiKeyOverride || getGeminiApiKey_();
+  const model = modelOverride || getGeminiModel_();
   const endpoint =
     'https://generativelanguage.googleapis.com/v1beta/models/' +
-    encodeURIComponent(RG_CONFIG.GEMINI_MODEL) +
+    encodeURIComponent(model) +
     ':generateContent';
   const payload = {
     contents: [{ role: 'user', parts: parts }],
@@ -838,36 +1005,56 @@ function callGeminiJson_(parts, schema) {
   throw lastError || new Error('The Gemini API request failed.');
 }
 
-function testGeminiConnection_() {
+function testGeminiConnection_(apiKeyOverride) {
   const schema = {
     type: 'object',
     additionalProperties: false,
     properties: { ok: { type: 'boolean' } },
     required: ['ok'],
   };
-  const result = callGeminiJson_([{ text: 'Yalniz {"ok":true} sonucunu uret.' }], schema);
+  const result = callGeminiJson_(
+    [{ text: 'Return only the structured result {"ok":true}.' }],
+    schema,
+    apiKeyOverride
+  );
   if (!result || result.ok !== true) {
     throw new Error('The Gemini connection test did not return the expected result.');
   }
 }
 
 function sendPublicationEmail_(report) {
-  if (MailApp.getRemainingDailyQuota() < 1) {
+  const settings = getAppSettings_();
+  const recipients = getRecipientEmails_();
+  if (MailApp.getRemainingDailyQuota() < recipients.length) {
     throw new Error('No Apps Script email quota remains for today.');
   }
   const subject = buildEmailSubject_(report);
-  MailApp.sendEmail({
-    to: getRecipientEmail_(),
+  const message = {
+    to: recipients[0],
     subject: subject,
     body: buildPlainTextEmail_(report),
     htmlBody: buildHtmlEmail_(report),
-    name: 'Official Gazette Alerts',
+    name: settings.senderName,
+  };
+  if (recipients.length > 1) message.bcc = recipients.slice(1).join(',');
+  MailApp.sendEmail(message);
+  logActivity_('email_sent', 'success', 'A publication alert was sent.', {
+    recipientCount: recipients.length,
+    positionCount: report.positions.length,
+    reviewCount: report.reviewNeeded.length,
   });
+}
+
+function shouldSendReport_(report, settings) {
+  if (settings.deliveryPolicy === 'all_issues') return true;
+  return report.positions.length > 0 || report.reviewNeeded.length > 0;
 }
 
 function buildEmailSubject_(report) {
   const prefix = report.positions.length
     ? '[Research Assistant: ' + report.positions.length + '] '
+    : report.reviewNeeded.length
+      ? '[Academic notices: ' + report.reviewNeeded.length + '] '
     : '[Official Gazette] ';
   const extra = report.publication.mukerrerNumber
     ? ' — Supplement No. ' + report.publication.mukerrerNumber
@@ -877,6 +1064,7 @@ function buildEmailSubject_(report) {
 
 function buildHtmlEmail_(report) {
   const publication = report.publication;
+  const aiMode = report.analysisMode || 'full';
   const safePdfUrl = safeOfficialUrl_(publication.pdfUrl);
   const summaryItems = report.aiSummary.bullets
     .map(function (item) {
@@ -887,12 +1075,20 @@ function buildHtmlEmail_(report) {
   const positionsHtml = report.positions.length
     ? report.positions.map(renderPositionCard_).join('')
     : '<div style="padding:16px;border-radius:10px;background:#eef8f0;color:#245c2d">' +
-      'Gemini did not detect a research-assistant vacancy in this issue.' +
+      (aiMode === 'full' && !report.reviewNeeded.length
+        ? 'No research-assistant vacancy was detected in the completed analysis.'
+        : 'No vacancy has been confirmed. Review the potential academic notices below.') +
       '</div>';
 
   const reviewHtml = report.reviewNeeded.length
-    ? '<h2 style="font-size:18px;margin:28px 0 12px;color:#7a4c00">Documents requiring manual review</h2>' +
-      '<p style="color:#6b5a3a">AI analysis could not be completed. Open these sources to avoid missing a relevant notice.</p>' +
+    ? '<h2 style="font-size:18px;margin:28px 0 12px;color:#7a4c00">' +
+      (aiMode === 'full' ? 'Documents requiring manual review' : 'Potential academic notices') +
+      '</h2>' +
+      '<p style="color:#6b5a3a">' +
+      (aiMode === 'full'
+        ? 'Automated analysis was incomplete or uncertain. Open these sources to avoid missing a relevant notice.'
+        : 'PDF vacancy extraction is disabled in this analysis mode. Open each official source and verify it manually.') +
+      '</p>' +
       '<ul style="padding-left:20px">' +
       report.reviewNeeded
         .map(function (entry) {
@@ -945,6 +1141,23 @@ function buildHtmlEmail_(report) {
       '</ol>'
     : '<p>Headlines could not be parsed; use the official PDF link.</p>';
 
+  const summaryTitle = aiMode === 'off' ? 'Issue overview' : 'Issue summary';
+  const summarySection = report.aiSummary.bullets.length
+    ? '<h2 style="font-size:18px;margin:0 0 12px">' + summaryTitle + '</h2>' +
+      '<ul style="padding-left:20px;margin-top:0">' + summaryItems + '</ul>'
+    : '';
+  const headlineSection = report.includeHeadlines
+    ? '<h2 style="font-size:18px;margin:30px 0 12px">All published headlines (' +
+      publication.items.length +
+      ')</h2>' +
+      headlineHtml
+    : '';
+  const analysisLabel = aiMode === 'full'
+    ? 'Gemini full analysis'
+    : aiMode === 'summary_only'
+      ? 'Gemini headline summary; manual PDF review'
+      : 'Keyword mode; no AI calls';
+
   return (
     '<!doctype html><html><body style="margin:0;background:#f3f5f7;font-family:Arial,Helvetica,sans-serif;color:#202124">' +
     '<div style="max-width:760px;margin:0 auto;padding:20px">' +
@@ -957,24 +1170,21 @@ function buildHtmlEmail_(report) {
     '<div style="margin-bottom:22px"><a href="' +
     escapeHtml_(safePdfUrl) +
     '" style="display:inline-block;background:#9b1c31;color:#fff;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:700">Open official PDF</a></div>' +
-    '<h2 style="font-size:18px;margin:0 0 12px">Gemini summary</h2>' +
-    '<ul style="padding-left:20px;margin-top:0">' +
-    summaryItems +
-    '</ul>' +
-    '<h2 style="font-size:18px;margin:28px 0 12px;color:#9b1c31">Research-assistant vacancies (' +
+    summarySection +
+    '<h2 style="font-size:18px;margin:28px 0 12px;color:#9b1c31">' +
+    (aiMode === 'full' ? 'Research-assistant vacancies' : 'Confirmed research-assistant vacancies') +
+    ' (' +
     report.positions.length +
     ')</h2>' +
     positionsHtml +
     reviewHtml +
     otherAcademicHtml +
-    '<h2 style="font-size:18px;margin:30px 0 12px">All published headlines (' +
-    publication.items.length +
-    ')</h2>' +
-    headlineHtml +
+    headlineSection +
     '<div style="margin-top:28px;padding-top:16px;border-top:1px solid #e0e0e0;color:#6b7280;font-size:12px;line-height:1.5">' +
-    'This AI-generated summary is provided for convenience. Always verify deadlines and requirements in the official notice before applying.<br>' +
-    'Model: ' +
-    escapeHtml_(RG_CONFIG.GEMINI_MODEL) +
+    'Independent monitoring aid. Always verify deadlines and requirements in the official notice before applying.<br>' +
+    'Analysis: ' +
+    escapeHtml_(analysisLabel) +
+    (aiMode !== 'off' ? ' &middot; Model: ' + escapeHtml_(getGeminiModel_()) : '') +
     ' &middot; Source: <a href="' +
     escapeHtml_(safeOfficialUrl_(publication.pageUrl)) +
     '" style="color:#0b57d0">resmigazete.gov.tr</a>' +
@@ -1060,16 +1270,21 @@ function renderPositionCard_(entry) {
 }
 
 function buildPlainTextEmail_(report) {
+  const aiMode = report.analysisMode || 'full';
   const lines = [
     report.publication.title,
     report.publication.pdfUrl,
     '',
-    'GEMINI SUMMARY',
+    aiMode === 'off' ? 'ISSUE OVERVIEW' : 'ISSUE SUMMARY',
   ];
   report.aiSummary.bullets.forEach(function (item) {
     lines.push('- ' + item);
   });
-  lines.push('', 'RESEARCH-ASSISTANT VACANCIES: ' + report.positions.length);
+  lines.push(
+    '',
+    (aiMode === 'full' ? 'RESEARCH-ASSISTANT VACANCIES: ' : 'CONFIRMED RESEARCH-ASSISTANT VACANCIES: ') +
+      report.positions.length
+  );
   report.positions.forEach(function (entry, index) {
     const position = entry.position;
     lines.push(
@@ -1086,21 +1301,34 @@ function buildPlainTextEmail_(report) {
       lines.push('- ' + entry.title + ': ' + entry.url);
     });
   }
-  lines.push('', 'ALL HEADLINES');
-  report.publication.items.forEach(function (item) {
-    lines.push('- ' + item.title + ': ' + item.url);
-  });
+  if (report.includeHeadlines) {
+    lines.push('', 'ALL HEADLINES');
+    report.publication.items.forEach(function (item) {
+      lines.push('- ' + item.title + ': ' + item.url);
+    });
+  }
+  lines.push('', 'Analysis mode: ' + aiMode.replace(/_/g, ' '));
   lines.push('', 'Note: Always verify the official notice before applying.');
   return lines.join('\n');
 }
 
 function buildSetupSuccessEmail_() {
+  const settings = getAppSettings_();
+  const analysisLabel = settings.aiMode === 'full'
+    ? 'Full Gemini document analysis'
+    : settings.aiMode === 'summary_only'
+      ? 'Gemini headline summaries with manual PDF review'
+      : 'Keyword mode without AI calls';
   return (
     '<div style="font-family:Arial,sans-serif;max-width:640px;line-height:1.55;color:#202124">' +
     '<h1 style="font-size:22px;color:#9b1c31">Setup complete</h1>' +
     '<p>Turkish Official Gazette Academic Alerts is ready in your Google account.</p>' +
-    '<ul><li>Checks regular and supplementary issues several times per day.</li>' +
-    '<li>Summarizes headlines.</li><li>Uses Gemini to extract research-assistant vacancies from notice PDFs.</li>' +
+    '<ul><li>Checks regular and supplementary issues approximately every ' +
+    escapeHtml_(settings.checkIntervalHours) +
+    ' hour(s) during the configured active window.</li>' +
+    '<li>Analysis: ' +
+    escapeHtml_(analysisLabel) +
+    '.</li>' +
     '<li>Does not resend the same issue.</li></ul>' +
     '<p><strong>Next:</strong> Run <code>checkTodayNow</code> once in Apps Script to generate the first live report.</p>' +
     '</div>'
@@ -1125,7 +1353,7 @@ function fetchText_(url, allowNotFound) {
     text: response.getContentText('UTF-8'),
   };
   if (!result.ok && !(allowNotFound && status === 404)) {
-    throw new Error('Sayfa okunamadi (HTTP ' + status + '): ' + url);
+    throw new Error('The page could not be read (HTTP ' + status + '): ' + url);
   }
   return result;
 }
@@ -1241,7 +1469,8 @@ function cleanHeadline_(value) {
     .replace(/[\uE000-\uF8FF]/g, ' ')
     .replace(/^\s*(?:[-–—]+|[a-d]\s*[-–—])\s*/i, '')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    .slice(0, 500);
 }
 
 function absoluteUrl_(href, baseUrl) {
@@ -1305,19 +1534,12 @@ function getDateParts_(date) {
 }
 
 function validateConfiguration_() {
-  getRecipientEmail_();
-  getGeminiApiKey_();
+  getRecipientEmails_();
+  if (getAppSettings_().aiMode !== 'off') getGeminiApiKey_();
 }
 
 function getRecipientEmail_() {
-  const email = PropertiesService.getScriptProperties()
-    .getProperty(RG_PROPERTY_KEYS.RECIPIENT_EMAIL);
-  if (!email || !/^\S+@\S+\.\S+$/.test(email.trim())) {
-    throw new Error(
-      'Set a valid RECIPIENT_EMAIL in Project Settings > Script Properties.'
-    );
-  }
-  return email.trim();
+  return getRecipientEmails_()[0];
 }
 
 function getGeminiApiKey_() {
@@ -1356,11 +1578,10 @@ function withScriptLock_(callback) {
 }
 
 function notifyProblemIfLate_(date, error) {
-  const hour = Number(Utilities.formatDate(date, RG_CONFIG.TIME_ZONE, 'H'));
-  if (hour < RG_CONFIG.LAST_CHECK_HOUR) return;
+  if (!getAppSettings_().notifyErrors) return;
   const parts = getDateParts_(date);
   notifyProblemOnce_(
-    parts.iso,
+    parts.iso + '|check_failed',
     '[Official Gazette Alerts] Check failed — ' + parts.human,
     'The final scheduled check could not be completed.\n\nError: ' + safeErrorMessage_(error) +
       '\n\nOpen Executions in the Apps Script project for details.'
@@ -1369,7 +1590,7 @@ function notifyProblemIfLate_(date, error) {
 
 function notifyNoPublicationOnce_(dateParts) {
   notifyProblemOnce_(
-    dateParts.iso,
+    dateParts.iso + '|no_publication',
     '[Official Gazette Alerts] No issue found — ' + dateParts.human,
     dateParts.human +
       ' had no matching Official Gazette issue at the final check. Review the official site manually: ' +
@@ -1379,23 +1600,34 @@ function notifyNoPublicationOnce_(dateParts) {
 
 function notifyProblemOnce_(dateKey, subject, message) {
   const props = PropertiesService.getScriptProperties();
-  const last = loadJsonProperty_(RG_PROPERTY_KEYS.LAST_PROBLEM_NOTICE, {});
-  if (last.date === dateKey) return;
-  if (MailApp.getRemainingDailyQuota() < 1) return;
-  MailApp.sendEmail({
-    to: getRecipientEmail_(),
+  const notices = loadJsonProperty_(RG_PROPERTY_KEYS.LAST_PROBLEM_NOTICE, {});
+  if (notices[dateKey]) return;
+  const settings = getAppSettings_();
+  const recipients = getRecipientEmails_();
+  if (MailApp.getRemainingDailyQuota() < recipients.length) return;
+  const email = {
+    to: recipients[0],
     subject: subject,
     body: message,
-    name: 'Official Gazette Alerts',
-  });
-  saveJsonProperty_(RG_PROPERTY_KEYS.LAST_PROBLEM_NOTICE, {
-    date: dateKey,
-    sentAt: new Date().toISOString(),
-  });
+    name: settings.senderName,
+  };
+  if (recipients.length > 1) email.bcc = recipients.slice(1).join(',');
+  MailApp.sendEmail(email);
+  notices[dateKey] = new Date().toISOString();
+  const compact = {};
+  Object.keys(notices)
+    .sort(function (a, b) {
+      return Date.parse(notices[b] || 0) - Date.parse(notices[a] || 0);
+    })
+    .slice(0, 30)
+    .forEach(function (key) {
+      compact[key] = notices[key];
+    });
+  saveJsonProperty_(RG_PROPERTY_KEYS.LAST_PROBLEM_NOTICE, compact);
 }
 
 function getCachedAnalysis_(url) {
-  const key = 'RG_ANALYSIS_' + shortHash_(url);
+  const key = analysisCacheKey_(url);
   const raw = PropertiesService.getScriptProperties().getProperty(key);
   if (!raw) return null;
   try {
@@ -1410,7 +1642,7 @@ function getCachedAnalysis_(url) {
 
 function cacheAnalysis_(url, analysis) {
   const props = PropertiesService.getScriptProperties();
-  const key = 'RG_ANALYSIS_' + shortHash_(url);
+  const key = analysisCacheKey_(url);
   const nowIso = new Date().toISOString();
   const payload = JSON.stringify({ savedAt: nowIso, data: analysis });
   if (Utilities.newBlob(payload, 'application/json').getBytes().length > 8000) return;
@@ -1438,6 +1670,12 @@ function cacheAnalysis_(url, analysis) {
   props.setProperty(key, payload);
   keep[key] = nowIso;
   saveJsonProperty_(RG_PROPERTY_KEYS.CACHE_INDEX, keep);
+}
+
+function analysisCacheKey_(url) {
+  return 'RG_ANALYSIS_' + shortHash_(
+    url + '|' + getGeminiModel_() + '|full|academic-prompt-v2'
+  );
 }
 
 function pruneProcessedState_(state) {
@@ -1509,8 +1747,8 @@ function summarizeApiError_(body) {
 }
 
 function safeErrorMessage_(error) {
-  return String(error && error.message ? error.message : error || 'Bilinmeyen hata')
-    .replace(/AIza[0-9A-Za-z_-]{20,}/g, '[API ANAHTARI GIZLENDI]')
+  return String(error && error.message ? error.message : error || 'Unknown error')
+    .replace(/AIza[0-9A-Za-z_-]{20,}/g, '[API KEY REDACTED]')
     .slice(0, 1000);
 }
 

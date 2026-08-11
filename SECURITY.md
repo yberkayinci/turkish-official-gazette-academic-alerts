@@ -18,3 +18,9 @@ Do not open a public issue that contains API keys, email addresses, access token
 ## Secret handling
 
 This repository must never contain real Gemini API keys or recipient addresses. Runtime configuration belongs in the user's private Apps Script **Script Properties**. If a secret is accidentally committed, revoke or rotate it immediately; removing it from the latest commit is not sufficient.
+
+## Deployment requirements
+
+Deploy the web app with **Execute as me** and **Only myself**. Never expose this single-tenant version anonymously or to a broad audience. Every customer must own a separate Apps Script copy.
+
+The dashboard never returns the stored Gemini key. A blank key field preserves the existing value, and removal is a separate confirmed action that requires AI to be disabled. Keep the Apps Script project private because project editors can read Script Properties.

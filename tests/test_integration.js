@@ -81,6 +81,7 @@ const context = {
         atHour: () => builder,
         nearMinute: () => builder,
         everyDays: () => builder,
+        everyHours: () => builder,
         inTimezone: () => builder,
         create: () => builder,
       };
@@ -184,8 +185,10 @@ const context = {
 store.GEMINI_API_KEY = 'test-api-key-that-is-long-enough';
 store.RECIPIENT_EMAIL = 'alerts@example.com';
 vm.createContext(context);
-const codePath = path.resolve(__dirname, '../Code.gs');
-vm.runInContext(fs.readFileSync(codePath, 'utf8'), context, { filename: codePath });
+['Code.gs', 'WebApp.gs'].forEach((filename) => {
+  const codePath = path.resolve(__dirname, '..', filename);
+  vm.runInContext(fs.readFileSync(codePath, 'utf8'), context, { filename: codePath });
+});
 
 const first = context.monitorDate_(new Date('2026-08-04T10:00:00+03:00'), false);
 assert.strictEqual(first.sent, 1);
