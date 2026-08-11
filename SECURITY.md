@@ -17,10 +17,29 @@ Do not open a public issue that contains API keys, email addresses, access token
 
 ## Secret handling
 
-This repository must never contain real Gemini API keys or recipient addresses. Runtime configuration belongs in the user's private Apps Script **Script Properties**. If a secret is accidentally committed, revoke or rotate it immediately; removing it from the latest commit is not sufficient.
+This repository must never contain real Gemini, Resend, database, session, encryption, or Cron secrets, recipient addresses, or deployment URLs. If a secret is accidentally committed, revoke or rotate it immediately; removing it from the latest commit is not sufficient.
 
-## Deployment requirements
+## Apps Script Edition
 
 Deploy the web app with **Execute as me** and **Only myself**. Never expose this single-tenant version anonymously or to a broad audience. Every customer must own a separate Apps Script copy.
 
 The dashboard never returns the stored Gemini key. A blank key field preserves the existing value, and removal is a separate confirmed action that requires AI to be disabled. Keep the Apps Script project private because project editors can read Script Properties.
+
+## Vercel Private Edition
+
+The Vercel application is also single-tenant. It must keep registration disabled and require the administrator session on every dashboard and mutation route.
+
+- Store `DATABASE_URL`, `ADMIN_PASSWORD_HASH`, `SESSION_SECRET`, `APP_ENCRYPTION_KEY`, `CRON_SECRET`, and provider fallback keys only in server-side Vercel environment variables.
+- Never use a `NEXT_PUBLIC_` prefix for a secret.
+- Encrypt dashboard-managed Gemini or Resend keys with AES-256-GCM before database storage and return only configured-state metadata to the browser.
+- Protect Cron with an exact bearer-secret comparison, a database lease, and delivery idempotency. Cron requests may overlap or be delivered more than once.
+- Require same-origin mutation requests and throttle authentication, test-email, AI-test, resend, and manual-check actions.
+- Fetch only HTTPS resources from `www.resmigazete.gov.tr`; validate every redirect, content type, PDF signature, size, and timeout.
+- Use a verified Resend domain for production and keep recipients private. A test endpoint may send only to already saved recipients.
+- Keep preview and production secrets separate. Do not put real production provider keys into untrusted pull-request deployments.
+
+The Vercel Edition is not approved for open multi-user registration. Removing the owner check does not create safe tenant isolation. See [Commercial architecture](docs/COMMERCIALIZATION.md).
+
+## Key rotation
+
+Rotate provider and authentication secrets after suspected disclosure. Rotating `APP_ENCRYPTION_KEY` requires re-encrypting stored credentials first; otherwise those credentials become unreadable. Document and test database backup, migration, rollback, and restoration before commercial operation.

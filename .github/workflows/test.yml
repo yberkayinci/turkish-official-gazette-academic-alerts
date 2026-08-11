@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  apps-script:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -24,3 +24,33 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  vercel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/vercel
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/vercel/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
