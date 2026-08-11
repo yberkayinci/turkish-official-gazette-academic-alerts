@@ -79,7 +79,7 @@ Recommended server-managed fallbacks:
 | `RESEND_API_KEY` | Email delivery when no encrypted dashboard key is stored |
 | `RESEND_FROM` | Verified default sender, such as `Official Gazette Monitor <alerts@example.com>` |
 | `GEMINI_API_KEY` | Optional system Gemini key; dashboard BYOK can replace it |
-| `VERCEL_CRON_PROFILE` | `hobby` for daily or `pro` for hourly scheduling |
+| `VERCEL_CRON_PROFILE` | Runtime profile that must match the committed static `vercel.json` |
 
 Generate values locally:
 
@@ -104,21 +104,37 @@ Resend's shared test sender is for account-owner testing only. A verified domain
 
 ## 5. Choose the Cron profile
 
-The repository defaults to the daily Hobby-safe profile. Set:
+Vercel requires every committed Cron entry to contain a concrete `schedule` string. The repository therefore ships a static, daily Hobby configuration in `apps/vercel/vercel.json`; it does not generate the schedule from an environment-variable expression.
+
+For the default Hobby deployment, keep the committed configuration and set:
 
 ```text
 VERCEL_CRON_PROFILE=hobby
 ```
 
-The Hobby profile checks once a day at 10:17 `Europe/Istanbul` (07:17 UTC).
+The static schedule is `17 7 * * *`, nominally 10:17 in `Europe/Istanbul` (07:17 UTC). Hobby scheduling has hourly precision, so Vercel may invoke it at any point from 10:00 through 10:59 Istanbul time.
 
-For Vercel Pro and sub-daily monitoring, set:
+For Vercel Pro and sub-daily monitoring, select the tracked hourly template from `apps/vercel`:
+
+```bash
+npm run cron:pro
+```
+
+Then set:
 
 ```text
 VERCEL_CRON_PROFILE=pro
 ```
 
-Redeploy after changing the profile. The Pro configuration invokes the protected monitor route hourly; the application then enforces the interval and `Europe/Istanbul` active-hours settings saved in the dashboard.
+Review and commit the resulting `vercel.json`, then redeploy. Git-connected Vercel deployments read configuration from the committed repository, so running the selection command locally without committing the changed file does not update production. The Pro schedule is `17 * * * *`; it invokes the protected monitor route at minute 17 of each hour, and the application then enforces the interval and `Europe/Istanbul` active-hours settings saved in the dashboard.
+
+To return to Hobby:
+
+```bash
+npm run cron:hobby
+```
+
+Set `VERCEL_CRON_PROFILE=hobby`, commit `vercel.json`, and redeploy. `npm run cron:verify` checks that the runtime profile and static schedule agree. The same check runs automatically before a production build, preventing a profile mismatch from being deployed. The canonical templates remain available at `config/vercel.hobby.json` and `config/vercel.pro.json`.
 
 Vercel adds `Authorization: Bearer <CRON_SECRET>` to registered Cron requests. The endpoint fails closed when the secret is missing or incorrect. See [Managing Cron Jobs](https://vercel.com/docs/cron-jobs/manage-cron-jobs).
 

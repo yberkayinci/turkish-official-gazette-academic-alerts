@@ -144,7 +144,7 @@ The hosted edition lives in [`apps/vercel`](apps/vercel) and keeps the Apps Scri
 6. Deploy, sign in, complete the dashboard, send a test email, and run the first check in Keyword mode.
 7. Enable monitoring after storage, email, and Cron health are ready.
 
-Vercel Hobby supports native Cron only once per day. Set the Pro Cron profile for sub-daily monitoring. A verified Resend domain is required for production recipients. Follow the complete [Vercel deployment guide](docs/VERCEL_DEPLOYMENT.md).
+Vercel Hobby supports native Cron only once per day, so the committed `vercel.json` is deliberately Hobby-safe. On Vercel Pro, run `npm run cron:pro`, set `VERCEL_CRON_PROFILE=pro`, commit the resulting static configuration, and redeploy to enable sub-daily monitoring. A verified Resend domain is required for production recipients. Follow the complete [Vercel deployment guide](docs/VERCEL_DEPLOYMENT.md).
 
 > Do not enable both editions for the same recipients unless duplicate alerts are intentional. Their processed-publication state does not synchronize.
 

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm run cron:verify",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
@@ -12,7 +13,10 @@
     "test:watch": "vitest",
     "db:migrate": "node scripts/migrate.mjs",
     "auth:hash-password": "node scripts/hash-password.mjs",
-    "secrets:generate": "node scripts/generate-secrets.mjs"
+    "secrets:generate": "node scripts/generate-secrets.mjs",
+    "cron:hobby": "node scripts/select-cron-profile.mjs hobby",
+    "cron:pro": "node scripts/select-cron-profile.mjs pro",
+    "cron:verify": "node scripts/verify-cron-config.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -37,7 +37,6 @@
     "tests/**/*.ts",
     "vitest.config.ts",
     "next.config.ts",
-    "vercel.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
