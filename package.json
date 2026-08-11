@@ -1,10 +1,10 @@
 {
   "name": "turkish-official-gazette-academic-alerts",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Serverless Official Gazette monitoring and Gemini-powered research-assistant vacancy alerts.",
   "scripts": {
-    "test": "node tests/test_parser.js && node tests/test_integration.js"
+    "test": "node tests/test_parser.js && node tests/test_integration.js && node tests/test_settings.js && node tests/test_ui.js"
   },
   "engines": {
     "node": ">=20"

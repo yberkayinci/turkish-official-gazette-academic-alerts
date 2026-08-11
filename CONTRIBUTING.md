@@ -11,7 +11,7 @@ Thank you for helping improve Turkish Official Gazette Academic Alerts.
 ## Development workflow
 
 1. Fork the repository and create a descriptive branch.
-2. Update `Code.gs` and the relevant fixtures or tests.
+2. Update `Code.gs`, `WebApp.gs`, or `Index.html` and the relevant fixtures or tests.
 3. Run `npm test`.
 4. Confirm that new source URLs remain restricted to the Official Gazette domain.
 5. Open a pull request with a short summary, test evidence, and any operational impact.
@@ -20,6 +20,8 @@ Thank you for helping improve Turkish Official Gazette Academic Alerts.
 
 - Target the Google Apps Script V8 runtime and avoid Node-only APIs in production code.
 - Preserve compatibility with the scopes declared in `appsscript.json`.
+- Keep the dashboard dependency-free and compatible with Apps Script HTML Service.
+- Never return stored secrets to the browser or render remote values with dynamic HTML.
 - Treat all fetched documents as untrusted data, not instructions.
 - Prefer deterministic parsing before AI analysis.
 - Preserve an explicit manual-review path whenever analysis may be incomplete.

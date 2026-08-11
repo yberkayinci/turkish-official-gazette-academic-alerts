@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const codePath = path.resolve(__dirname, '../Code.gs');
 const context = {
   console,
   Utilities: {
@@ -17,7 +16,10 @@ const context = {
   },
 };
 vm.createContext(context);
-vm.runInContext(fs.readFileSync(codePath, 'utf8'), context, { filename: codePath });
+['Code.gs', 'WebApp.gs'].forEach((filename) => {
+  const codePath = path.resolve(__dirname, '..', filename);
+  vm.runInContext(fs.readFileSync(codePath, 'utf8'), context, { filename: codePath });
+});
 
 const dateParts = {
   year: '2026',

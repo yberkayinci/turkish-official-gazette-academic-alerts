@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="color-scheme" content="light">
+    <style>
+      :root {
+        --brand: #8b1e34;
+        --brand-dark: #681326;
+        --brand-soft: #f8edf0;
+        --ink: #182230;
+        --muted: #5d6673;
+        --subtle: #8a94a3;
+        --paper: #f7f5f2;
+        --surface: #ffffff;
+        --border: #dfe3e8;
+        --success: #18794e;
+        --success-soft: #e8f5ee;
+        --warning: #9a6700;
+        --warning-soft: #fff6db;
+        --error: #b42318;
+        --error-soft: #fff0ee;
+        --info: #175cd3;
+        --shadow: 0 16px 38px rgba(24, 34, 48, 0.08);
+        --radius: 16px;
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      button, input, select, textarea { font: inherit; }
+      button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+      button { min-height: 44px; }
+      a { color: var(--brand); }
+      :focus-visible { outline: 3px solid rgba(23, 92, 211, 0.34); outline-offset: 2px; }
+
+      .app-shell { min-height: 100vh; }
+      .topline { height: 4px; background: linear-gradient(90deg, var(--brand), #c84a62 60%, #e5a1ae); }
+      .header {
+        background: rgba(255, 255, 255, 0.92);
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        backdrop-filter: blur(14px);
+      }
+      .header-inner {
+        max-width: 1160px;
+        margin: 0 auto;
+        min-height: 72px;
+        padding: 12px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+      .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: var(--brand);
+        color: #fff;
+        font-size: 21px;
+        font-weight: 800;
+        box-shadow: 0 8px 18px rgba(139, 30, 52, 0.22);
+      }
+      .brand-name { font-size: 17px; font-weight: 780; letter-spacing: -0.02em; }
+      .brand-subtitle { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .header-actions { display: flex; align-items: center; gap: 10px; }
+
+      .container { max-width: 1160px; margin: 0 auto; padding: 34px 24px 110px; }
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 28px;
+        align-items: end;
+        margin-bottom: 28px;
+      }
+      .eyebrow { color: var(--brand); font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+      h1 { font-size: clamp(30px, 5vw, 48px); line-height: 1.08; letter-spacing: -0.045em; margin: 8px 0 12px; max-width: 780px; }
+      .hero p { color: var(--muted); margin: 0; max-width: 730px; font-size: 17px; }
+      .hero-meta { text-align: right; color: var(--subtle); font-size: 12px; }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        padding: 6px 11px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 750;
+        background: #eef1f4;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .status-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+      .status-pill.success { background: var(--success-soft); color: var(--success); }
+      .status-pill.warning { background: var(--warning-soft); color: var(--warning); }
+      .status-pill.error { background: var(--error-soft); color: var(--error); }
+
+      .notice {
+        border: 1px solid #efcf8e;
+        background: var(--warning-soft);
+        border-radius: var(--radius);
+        padding: 17px 18px;
+        display: flex;
+        gap: 13px;
+        align-items: flex-start;
+        margin-bottom: 22px;
+      }
+      .notice[hidden] { display: none; }
+      .notice-mark { width: 28px; height: 28px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center; background: #f4d58d; color: #6d4700; font-weight: 900; }
+      .notice strong { display: block; margin-bottom: 2px; }
+      .notice p { margin: 0; color: #70551f; }
+
+      .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 26px; }
+      .metric { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 17px; min-height: 118px; }
+      .metric-label { color: var(--muted); font-size: 12px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.06em; }
+      .metric-value { margin-top: 10px; font-size: 18px; font-weight: 780; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+      .metric-note { color: var(--subtle); font-size: 12px; margin-top: 5px; }
+
+      .content-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; align-items: start; }
+      .stack { display: grid; gap: 18px; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 1px 2px rgba(24, 34, 48, 0.03); }
+      .card-header { padding: 22px 24px 15px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+      .card-body { padding: 5px 24px 24px; }
+      .section-number { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); font-size: 13px; font-weight: 850; flex: 0 0 auto; }
+      .section-title-wrap { display: flex; gap: 12px; }
+      h2 { font-size: 19px; letter-spacing: -0.02em; margin: 1px 0 3px; }
+      .section-description { margin: 0; color: var(--muted); font-size: 13px; }
+
+      .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
+      .field.full { grid-column: 1 / -1; }
+      label, legend { color: var(--ink); font-weight: 700; font-size: 13px; }
+      .label-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 7px; }
+      .optional { color: var(--subtle); font-size: 11px; font-weight: 600; }
+      input[type="email"], input[type="password"], input[type="text"], select, textarea {
+        width: 100%;
+        min-height: 46px;
+        border: 1px solid #cfd5dc;
+        background: #fff;
+        border-radius: 10px;
+        padding: 10px 12px;
+        color: var(--ink);
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+      textarea { min-height: 82px; resize: vertical; }
+      input:hover, select:hover, textarea:hover { border-color: #a9b1bc; }
+      input:focus, select:focus, textarea:focus { border-color: var(--info); box-shadow: 0 0 0 3px rgba(23, 92, 211, 0.12); outline: none; }
+      .help { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+      .input-action { position: relative; }
+      .input-action input { padding-right: 70px; }
+      .text-button { border: 0; background: transparent; color: var(--brand); font-weight: 750; padding: 5px 8px; min-height: 34px; cursor: pointer; }
+      .input-action .text-button { position: absolute; right: 5px; top: 6px; }
+
+      fieldset { border: 0; padding: 0; margin: 0; }
+      legend { margin-bottom: 9px; }
+      .choice-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+      .choice { position: relative; }
+      .choice input { position: absolute; opacity: 0; pointer-events: none; }
+      .choice label { display: block; min-height: 142px; border: 1px solid var(--border); border-radius: 12px; padding: 14px; cursor: pointer; transition: 0.15s ease; }
+      .choice label:hover { border-color: #b9a0a6; transform: translateY(-1px); }
+      .choice input:checked + label { border-color: var(--brand); background: var(--brand-soft); box-shadow: 0 0 0 1px var(--brand); }
+      .choice input:focus-visible + label { outline: 3px solid rgba(23, 92, 211, 0.34); outline-offset: 2px; }
+      .choice-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 800; }
+      .choice-badge { color: var(--success); background: var(--success-soft); border-radius: 999px; padding: 2px 7px; font-size: 10px; }
+      .choice-copy { color: var(--muted); display: block; font-size: 12px; margin-top: 8px; font-weight: 450; }
+
+      .toggle-row { display: flex; justify-content: space-between; gap: 18px; align-items: center; min-height: 50px; padding: 8px 0; }
+      .toggle-row + .toggle-row { border-top: 1px solid #edf0f2; }
+      .toggle-copy strong { display: block; font-size: 13px; }
+      .toggle-copy span { color: var(--muted); display: block; font-size: 12px; margin-top: 2px; }
+      .switch { position: relative; width: 46px; height: 26px; flex: 0 0 auto; }
+      .switch input { opacity: 0; width: 1px; height: 1px; }
+      .switch span { position: absolute; inset: 0; border-radius: 999px; background: #b8c0ca; cursor: pointer; transition: 0.18s; }
+      .switch span::after { content: ""; position: absolute; width: 20px; height: 20px; top: 3px; left: 3px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.22); transition: 0.18s; }
+      .switch input:checked + span { background: var(--brand); }
+      .switch input:checked + span::after { transform: translateX(20px); }
+      .switch input:focus-visible + span { outline: 3px solid rgba(23, 92, 211, 0.34); outline-offset: 2px; }
+
+      .inline-note { padding: 12px 14px; background: #f2f5f8; border-radius: 10px; color: var(--muted); font-size: 12px; margin-top: 15px; }
+      .secure-note { display: flex; gap: 9px; align-items: flex-start; }
+      .key-panel { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 18px; }
+      .key-panel[hidden] { display: none; }
+      .key-state { display: inline-flex; align-items: center; gap: 6px; color: var(--success); font-size: 12px; font-weight: 750; margin-bottom: 9px; }
+
+      .button { border: 1px solid transparent; border-radius: 10px; padding: 10px 15px; font-weight: 760; cursor: pointer; display: inline-flex; justify-content: center; align-items: center; gap: 8px; text-decoration: none; transition: background .15s, border-color .15s, transform .15s; }
+      .button:hover { transform: translateY(-1px); }
+      .button:disabled { opacity: .55; cursor: wait; transform: none; }
+      .button.primary { background: var(--brand); color: #fff; }
+      .button.primary:hover { background: var(--brand-dark); }
+      .button.secondary { background: #fff; border-color: #cfd5dc; color: var(--ink); }
+      .button.secondary:hover { border-color: #a7b0bb; background: #f9fafb; }
+      .button.danger { background: #fff; border-color: #f1b8b2; color: var(--error); }
+      .button.small { min-height: 38px; padding: 7px 11px; font-size: 12px; }
+      .button-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 17px; }
+
+      .side-card { padding: 21px; }
+      .side-card h2 { font-size: 16px; margin: 0 0 14px; }
+      .checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+      .checklist li { display: flex; gap: 10px; align-items: flex-start; color: var(--muted); font-size: 13px; }
+      .check-dot { width: 21px; height: 21px; border-radius: 50%; display: grid; place-items: center; background: #eef1f4; color: var(--subtle); font-size: 11px; font-weight: 900; flex: 0 0 auto; }
+      .checklist li.done { color: var(--ink); }
+      .checklist li.done .check-dot { background: var(--success-soft); color: var(--success); }
+      .side-divider { border: 0; border-top: 1px solid var(--border); margin: 20px 0; }
+      .security-copy { color: var(--muted); font-size: 12px; margin: 0; }
+
+      details.advanced { overflow: hidden; }
+      details.advanced summary { cursor: pointer; padding: 20px 24px; font-weight: 780; list-style: none; display: flex; justify-content: space-between; }
+      details.advanced summary::-webkit-details-marker { display: none; }
+      details.advanced summary::after { content: "+"; color: var(--brand); font-size: 20px; }
+      details.advanced[open] summary::after { content: "−"; }
+      .advanced-body { border-top: 1px solid var(--border); padding: 20px 24px 24px; }
+      .danger-zone { display: grid; gap: 12px; }
+      .danger-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
+      .danger-item + .danger-item { border-top: 1px solid #edf0f2; }
+      .danger-item strong { font-size: 13px; display: block; }
+      .danger-item span { color: var(--muted); font-size: 12px; }
+
+      .activity-list { display: grid; gap: 10px; }
+      .activity-item { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 11px; align-items: start; padding: 13px 0; }
+      .activity-item + .activity-item { border-top: 1px solid #edf0f2; }
+      .activity-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 6px; background: var(--subtle); }
+      .activity-dot.success { background: var(--success); }
+      .activity-dot.warning { background: var(--warning); }
+      .activity-dot.error { background: var(--error); }
+      .activity-title { font-weight: 700; font-size: 13px; }
+      .activity-time { color: var(--subtle); font-size: 11px; white-space: nowrap; }
+      .empty-state { color: var(--muted); text-align: center; padding: 22px 8px; font-size: 13px; }
+
+      .save-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); pointer-events: none; }
+      .save-bar[hidden] { display: none; }
+      .save-inner { max-width: 1120px; margin: 0 auto; background: #182230; color: #fff; border-radius: 14px; padding: 12px 14px 12px 18px; box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between; gap: 16px; pointer-events: auto; }
+      .save-copy { font-size: 13px; }
+      .save-actions { display: flex; gap: 8px; }
+      .save-inner .button.secondary { background: transparent; border-color: #536173; color: #fff; }
+
+      .toast-region { position: fixed; right: 20px; top: 88px; z-index: 60; display: grid; gap: 9px; width: min(380px, calc(100vw - 40px)); }
+      .toast { background: #fff; border: 1px solid var(--border); border-left: 4px solid var(--success); border-radius: 11px; box-shadow: var(--shadow); padding: 13px 15px; animation: toast-in .2s ease-out; }
+      .toast.error { border-left-color: var(--error); }
+      .toast strong { display: block; font-size: 13px; }
+      .toast span { color: var(--muted); font-size: 12px; }
+      .loading-cover { position: fixed; inset: 0; background: rgba(247,245,242,.7); z-index: 70; display: grid; place-items: center; backdrop-filter: blur(3px); }
+      .loading-cover[hidden] { display: none; }
+      .loader-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 19px 22px; box-shadow: var(--shadow); font-weight: 700; display: flex; gap: 12px; align-items: center; }
+      .spinner { width: 20px; height: 20px; border: 3px solid #eadde0; border-top-color: var(--brand); border-radius: 50%; animation: spin .8s linear infinite; }
+      footer { max-width: 1160px; margin: 0 auto; padding: 0 24px 36px; color: var(--subtle); font-size: 12px; display: flex; justify-content: space-between; gap: 20px; }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes toast-in { from { transform: translateY(-5px); opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+      @media (max-width: 920px) {
+        .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .content-grid { grid-template-columns: 1fr; }
+        .sidebar { order: -1; }
+        .choice-grid { grid-template-columns: 1fr; }
+        .choice label { min-height: auto; }
+      }
+      @media (max-width: 640px) {
+        .header-inner { padding: 10px 16px; min-height: 66px; }
+        .brand-subtitle, .header-actions .status-pill { display: none; }
+        .header-actions .button { padding: 9px 11px; font-size: 12px; }
+        .container { padding: 26px 16px 116px; }
+        .hero { grid-template-columns: 1fr; gap: 12px; }
+        .hero-meta { text-align: left; }
+        .metrics, .form-grid { grid-template-columns: 1fr; }
+        .field.full { grid-column: auto; }
+        .card-header, .card-body { padding-left: 18px; padding-right: 18px; }
+        .save-bar { padding-left: 8px; padding-right: 8px; }
+        .save-inner { border-radius: 12px; align-items: stretch; flex-direction: column; }
+        .save-actions, .save-actions .button { flex: 1; }
+        .danger-item { align-items: flex-start; flex-direction: column; }
+        footer { padding-left: 16px; padding-right: 16px; flex-direction: column; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <div class="topline"></div>
+      <header class="header">
+        <div class="header-inner">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">G</div>
+            <div>
+              <div class="brand-name">Official Gazette Monitor</div>
+              <div class="brand-subtitle">Academic vacancy intelligence</div>
+            </div>
+          </div>
+          <div class="header-actions">
+            <span class="status-pill" id="header-status">Loading</span>
+            <button class="button primary" type="button" id="check-now">Check now</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="container">
+        <section class="hero" aria-labelledby="page-title">
+          <div>
+            <div class="eyebrow">Private monitoring workspace</div>
+            <h1 id="page-title">Monitor the Gazette on your terms.</h1>
+            <p>Choose when to scan, what deserves an email, and whether Gemini should analyze official recruitment notices.</p>
+          </div>
+          <div class="hero-meta">Europe/Istanbul<br><span id="app-version">Version —</span></div>
+        </section>
+
+        <section class="notice" id="setup-notice" hidden aria-live="polite">
+          <div class="notice-mark" aria-hidden="true">!</div>
+          <div>
+            <strong id="setup-notice-title">Complete your private setup</strong>
+            <p id="setup-notice-copy">Add a recipient, choose an analysis mode, then save. Credentials remain inside your Apps Script project.</p>
+          </div>
+        </section>
+
+        <section class="metrics" aria-label="Monitoring status">
+          <article class="metric">
+            <div class="metric-label">Next check</div>
+            <div class="metric-value" id="metric-next">Loading…</div>
+            <div class="metric-note">Trigger times are approximate</div>
+          </article>
+          <article class="metric">
+            <div class="metric-label">Last check</div>
+            <div class="metric-value" id="metric-last">No checks yet</div>
+            <div class="metric-note" id="metric-last-note">Ready when you are</div>
+          </article>
+          <article class="metric">
+            <div class="metric-label">Email quota</div>
+            <div class="metric-value" id="metric-quota">—</div>
+            <div class="metric-note">Remaining recipients today</div>
+          </article>
+          <article class="metric">
+            <div class="metric-label">Analysis mode</div>
+            <div class="metric-value" id="metric-ai">—</div>
+            <div class="metric-note" id="metric-ai-note">Loading preferences</div>
+          </article>
+        </section>
+
+        <form id="settings-form" novalidate>
+          <div class="content-grid">
+            <div class="stack">
+              <section class="card" aria-labelledby="delivery-title">
+                <div class="card-header">
+                  <div class="section-title-wrap">
+                    <div class="section-number" aria-hidden="true">1</div>
+                    <div><h2 id="delivery-title">Email delivery</h2><p class="section-description">Choose who receives a report and when a publication deserves one.</p></div>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="form-grid">
+                    <div class="field">
+                      <div class="label-row"><label for="primary-recipient">Primary recipient</label><span class="optional">Required</span></div>
+                      <input id="primary-recipient" type="email" autocomplete="email" maxlength="254" required placeholder="name@example.com">
+                    </div>
+                    <div class="field">
+                      <div class="label-row"><label for="sender-name">Sender name</label></div>
+                      <input id="sender-name" type="text" maxlength="80" required placeholder="Official Gazette Monitor">
+                    </div>
+                    <div class="field full">
+                      <div class="label-row"><label for="additional-recipients">Additional recipients</label><span class="optional">Optional · maximum 2</span></div>
+                      <input id="additional-recipients" type="text" autocomplete="off" placeholder="team@example.com, advisor@example.com">
+                      <p class="help">Separate addresses with commas. Additional addresses are delivered by BCC; every recipient uses one unit of Apps Script email quota.</p>
+                    </div>
+                    <div class="field full">
+                      <div class="label-row"><label for="delivery-policy">Delivery policy</label></div>
+                      <select id="delivery-policy">
+                        <option value="matches_only">Only confirmed matches or notices requiring review — recommended</option>
+                        <option value="all_issues">Every newly published issue</option>
+                      </select>
+                      <p class="help">Scanning frequency does not create repeat emails; each issue is delivered at most once.</p>
+                    </div>
+                  </div>
+                  <div class="button-row">
+                    <button class="button secondary" type="button" id="test-email">Send test email</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="card" aria-labelledby="schedule-title">
+                <div class="card-header">
+                  <div class="section-title-wrap">
+                    <div class="section-number" aria-hidden="true">2</div>
+                    <div><h2 id="schedule-title">Monitoring schedule</h2><p class="section-description">Scan frequently without generating duplicate messages.</p></div>
+                  </div>
+                  <label class="switch"><input id="monitoring-enabled" type="checkbox" aria-label="Enable monitoring"><span></span></label>
+                </div>
+                <div class="card-body">
+                  <div class="form-grid">
+                    <div class="field">
+                      <div class="label-row"><label for="check-interval">Check every</label></div>
+                      <select id="check-interval">
+                        <option value="1">1 hour</option><option value="2">2 hours</option><option value="3">3 hours</option><option value="4">4 hours</option><option value="6">6 hours</option><option value="8">8 hours</option><option value="12">12 hours</option><option value="24">24 hours</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <div class="label-row"><label>Time zone</label></div>
+                      <input type="text" value="Europe/Istanbul" disabled aria-label="Fixed time zone">
+                    </div>
+                    <div class="field">
+                      <div class="label-row"><label for="active-start">Active from</label></div>
+                      <select id="active-start"></select>
+                    </div>
+                    <div class="field">
+                      <div class="label-row"><label for="active-end">Active until</label></div>
+                      <select id="active-end"></select>
+                    </div>
+                  </div>
+                  <div class="inline-note">One hourly scheduler checks whether your selected interval and active window are due. Apps Script may shift execution by several minutes.</div>
+                  <div class="toggle-row">
+                    <div class="toggle-copy"><strong>Check the previous day</strong><span>Catches late publications and delayed supplements.</span></div>
+                    <label class="switch"><input id="include-yesterday" type="checkbox" aria-label="Check the previous day"><span></span></label>
+                  </div>
+                  <div class="toggle-row">
+                    <div class="toggle-copy"><strong>Include supplemental issues</strong><span>Discover every supplement linked from the daily page.</span></div>
+                    <label class="switch"><input id="include-supplements" type="checkbox" aria-label="Include supplemental issues"><span></span></label>
+                  </div>
+                </div>
+              </section>
+
+              <section class="card" aria-labelledby="analysis-title">
+                <div class="card-header">
+                  <div class="section-title-wrap">
+                    <div class="section-number" aria-hidden="true">3</div>
+                    <div><h2 id="analysis-title">Analysis mode</h2><p class="section-description">Control cost, detail, and whether notice PDFs are sent to Gemini.</p></div>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <fieldset>
+                    <legend class="optional">Select one mode</legend>
+                    <div class="choice-grid">
+                      <div class="choice">
+                        <input id="mode-full" name="ai-mode" type="radio" value="full">
+                        <label for="mode-full"><span class="choice-title">Full AI <span class="choice-badge">Recommended</span></span><span class="choice-copy">Gemini reads candidate PDFs, extracts research-assistant details, and summarizes headlines.</span></label>
+                      </div>
+                      <div class="choice">
+                        <input id="mode-summary" name="ai-mode" type="radio" value="summary_only">
+                        <label for="mode-summary"><span class="choice-title">Summary only</span><span class="choice-copy">Gemini summarizes headlines. Potential academic PDFs are linked for manual review.</span></label>
+                      </div>
+                      <div class="choice">
+                        <input id="mode-off" name="ai-mode" type="radio" value="off">
+                        <label for="mode-off"><span class="choice-title">Keyword mode</span><span class="choice-copy">No AI key or AI calls. The app sends likely academic sources without claiming they were verified.</span></label>
+                      </div>
+                    </div>
+                  </fieldset>
+
+                  <div class="key-panel" id="key-panel">
+                    <div class="key-state" id="key-state">API key not configured</div>
+                    <div class="form-grid">
+                      <div class="field full">
+                        <div class="label-row"><label for="api-key">Gemini API key</label><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Create a key</a></div>
+                        <div class="input-action">
+                          <input id="api-key" type="password" autocomplete="off" maxlength="256" placeholder="Leave blank to keep the saved key">
+                          <button class="text-button" type="button" id="toggle-key" aria-label="Show API key">Show</button>
+                        </div>
+                        <p class="help">The saved key is never returned to this page. Google AI Pro and the Gemini Developer API are separate products.</p>
+                      </div>
+                    </div>
+                    <div class="toggle-row">
+                      <div class="toggle-copy"><strong>Summarize issue headlines</strong><span>Uses one additional Gemini request per new issue.</span></div>
+                      <label class="switch"><input id="summarize-headlines" type="checkbox" aria-label="Summarize issue headlines"><span></span></label>
+                    </div>
+                    <div class="button-row">
+                      <button class="button secondary" type="button" id="test-ai">Test AI connection</button>
+                      <button class="button danger" type="button" id="remove-key">Remove saved key</button>
+                    </div>
+                  </div>
+                  <div class="inline-note secure-note"><span aria-hidden="true">●</span><span>Keep this Apps Script project private. Script Properties are not a dedicated secrets vault; project editors can read stored values.</span></div>
+                </div>
+              </section>
+
+              <section class="card" aria-labelledby="filter-title">
+                <div class="card-header">
+                  <div class="section-title-wrap">
+                    <div class="section-number" aria-hidden="true">4</div>
+                    <div><h2 id="filter-title">Alert preferences</h2><p class="section-description">Fine-tune relevance without changing the official source.</p></div>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="form-grid">
+                    <div class="field full">
+                      <div class="label-row"><label for="required-keywords">Required keywords</label><span class="optional">Optional</span></div>
+                      <textarea id="required-keywords" placeholder="computer engineering, software, artificial intelligence"></textarea>
+                      <p class="help">Comma-separated. A result must contain at least one of these terms.</p>
+                    </div>
+                    <div class="field">
+                      <div class="label-row"><label for="excluded-keywords">Excluded keywords</label><span class="optional">Optional</span></div>
+                      <textarea id="excluded-keywords" placeholder="civil engineering, chemistry"></textarea>
+                    </div>
+                    <div class="field">
+                      <div class="label-row"><label for="preferred-institutions">Preferred institutions</label><span class="optional">Optional</span></div>
+                      <textarea id="preferred-institutions" placeholder="Ankara University, METU"></textarea>
+                    </div>
+                  </div>
+                  <div class="inline-note">Filters may hide applicable notices. Leave a list empty to include all values, and always verify the official document.</div>
+                  <div class="toggle-row">
+                    <div class="toggle-copy"><strong>Include correction notices</strong><span>Surface corrected recruitment announcements.</span></div>
+                    <label class="switch"><input id="include-corrections" type="checkbox" aria-label="Include correction notices"><span></span></label>
+                  </div>
+                  <div class="toggle-row">
+                    <div class="toggle-copy"><strong>Include cancellation notices</strong><span>Clearly label cancelled positions instead of presenting them as open.</span></div>
+                    <label class="switch"><input id="include-cancellations" type="checkbox" aria-label="Include cancellation notices"><span></span></label>
+                  </div>
+                  <div class="toggle-row">
+                    <div class="toggle-copy"><strong>Include uncertain results</strong><span>Recommended to reduce the chance of missing a relevant notice.</span></div>
+                    <label class="switch"><input id="include-uncertain" type="checkbox" aria-label="Include uncertain results"><span></span></label>
+                  </div>
+                  <div class="toggle-row">
+                    <div class="toggle-copy"><strong>Include all issue headlines</strong><span>Add the complete linked contents list to each report.</span></div>
+                    <label class="switch"><input id="include-headlines" type="checkbox" aria-label="Include all issue headlines"><span></span></label>
+                  </div>
+                  <div class="toggle-row">
+                    <div class="toggle-copy"><strong>Operational error alerts</strong><span>Send at most one safe error notice per error type each day.</span></div>
+                    <label class="switch"><input id="notify-errors" type="checkbox" aria-label="Send operational error alerts"><span></span></label>
+                  </div>
+                  <div class="toggle-row">
+                    <div class="toggle-copy"><strong>No-publication notice</strong><span>Notify when no issue is found at the final eligible check.</span></div>
+                    <label class="switch"><input id="notify-no-publication" type="checkbox" aria-label="Send a no-publication notice"><span></span></label>
+                  </div>
+                </div>
+              </section>
+
+              <details class="card advanced">
+                <summary>Advanced maintenance</summary>
+                <div class="advanced-body">
+                  <div class="danger-zone">
+                    <div class="danger-item"><div><strong>Repair monitoring schedule</strong><span>Recreate a missing or duplicate hourly scheduler.</span></div><button class="button secondary small" type="button" id="repair-scheduler">Repair</button></div>
+                    <div class="danger-item"><div><strong>Clear AI analysis cache</strong><span>Future matching documents will be analyzed again.</span></div><button class="button danger small" type="button" id="clear-cache">Clear cache</button></div>
+                    <div class="danger-item"><div><strong>Clear processed-publication history</strong><span>Previously seen issues may be emailed again.</span></div><button class="button danger small" type="button" id="clear-history">Clear history</button></div>
+                  </div>
+                </div>
+              </details>
+
+              <section class="card" aria-labelledby="activity-title">
+                <div class="card-header"><div><h2 id="activity-title">Recent activity</h2><p class="section-description">The latest safe operational events from this private deployment.</p></div></div>
+                <div class="card-body"><div class="activity-list" id="activity-list"><div class="empty-state">Loading activity…</div></div></div>
+              </section>
+            </div>
+
+            <aside class="stack sidebar" aria-label="Setup and security">
+              <section class="card side-card">
+                <h2>Launch checklist</h2>
+                <ol class="checklist">
+                  <li id="check-recipient"><span class="check-dot">1</span><span>Add a valid recipient</span></li>
+                  <li id="check-schedule"><span class="check-dot">2</span><span>Choose and activate a schedule</span></li>
+                  <li id="check-analysis"><span class="check-dot">3</span><span>Choose an analysis mode</span></li>
+                  <li id="check-health"><span class="check-dot">4</span><span>Verify the private scheduler</span></li>
+                </ol>
+                <hr class="side-divider">
+                <button class="button secondary" type="button" id="side-check" style="width:100%">Run first check</button>
+              </section>
+              <section class="card side-card">
+                <h2>Private by design</h2>
+                <p class="security-copy">Deploy with <strong>Execute as me</strong> and <strong>Only myself</strong>. Each customer should own a separate Apps Script copy, API key, quota, and schedule.</p>
+                <hr class="side-divider">
+                <p class="security-copy"><strong>Not a shared SaaS backend.</strong> A public multi-user commercial service requires isolated identity, database, secrets, billing, and infrastructure outside Apps Script.</p>
+              </section>
+            </aside>
+          </div>
+        </form>
+      </main>
+
+      <footer><span>Independent monitoring tool. Not affiliated with the Presidency of the Republic of Türkiye or the Official Gazette.</span><a href="https://www.resmigazete.gov.tr/" target="_blank" rel="noopener noreferrer">Open official source</a></footer>
+    </div>
+
+    <div class="save-bar" id="save-bar" hidden>
+      <div class="save-inner"><div class="save-copy">You have unsaved changes.</div><div class="save-actions"><button class="button secondary" type="button" id="discard-settings">Discard</button><button class="button primary" type="submit" form="settings-form" id="save-settings">Save settings</button></div></div>
+    </div>
+    <div class="toast-region" id="toast-region" aria-live="polite"></div>
+    <div class="loading-cover" id="loading-cover"><div class="loader-card"><span class="spinner" aria-hidden="true"></span><span id="loading-message">Loading your private workspace…</span></div></div>
+    <noscript><div role="alert" style="padding:20px">JavaScript is required to use this dashboard.</div></noscript>
+
+    <script>
+      'use strict';
+
+      const ui = {
+        form: document.getElementById('settings-form'),
+        loading: document.getElementById('loading-cover'),
+        loadingMessage: document.getElementById('loading-message'),
+        saveBar: document.getElementById('save-bar'),
+        apiKey: document.getElementById('api-key'),
+        keyPanel: document.getElementById('key-panel'),
+        keyState: document.getElementById('key-state'),
+      };
+      let dashboard = null;
+      let cleanSnapshot = '';
+      let busy = false;
+
+      function rpc(name, ...args) {
+        return new Promise((resolve, reject) => {
+          if (!window.google || !google.script || !google.script.run) {
+            reject(new Error('Open this page through a deployed Google Apps Script web app.'));
+            return;
+          }
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler((error) => reject(new Error(error && error.message ? error.message : 'Request failed.')))
+            [name](...args);
+        });
+      }
+
+      function setBusy(value, message) {
+        busy = value;
+        ui.loading.hidden = !value;
+        ui.loadingMessage.textContent = message || 'Working…';
+        document.querySelectorAll('button').forEach((button) => { button.disabled = value; });
+      }
+
+      function showToast(title, message, type) {
+        const toast = document.createElement('div');
+        toast.className = 'toast' + (type === 'error' ? ' error' : '');
+        const strong = document.createElement('strong');
+        const span = document.createElement('span');
+        strong.textContent = title;
+        span.textContent = message || '';
+        toast.append(strong, span);
+        document.getElementById('toast-region').appendChild(toast);
+        window.setTimeout(() => toast.remove(), 5200);
+      }
+
+      function assertResponse(response) {
+        if (!response || response.ok !== true) {
+          const error = new Error(response && response.message ? response.message : 'The operation could not be completed.');
+          error.code = response && response.errorCode;
+          throw error;
+        }
+        return response.data;
+      }
+
+      function formatDate(value) {
+        if (!value) return 'No checks yet';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return 'Unavailable';
+        return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Istanbul' }).format(date);
+      }
+
+      function parseList(value) {
+        return String(value || '').split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
+      }
+
+      function populateHours() {
+        ['active-start', 'active-end'].forEach((id) => {
+          const select = document.getElementById(id);
+          for (let hour = 0; hour < 24; hour += 1) {
+            const option = document.createElement('option');
+            option.value = String(hour);
+            option.textContent = String(hour).padStart(2, '0') + ':00';
+            select.appendChild(option);
+          }
+        });
+      }
+
+      function collectSettings() {
+        const selectedMode = document.querySelector('input[name="ai-mode"]:checked');
+        return {
+          revision: dashboard.settings.revision,
+          primaryRecipient: document.getElementById('primary-recipient').value.trim(),
+          additionalRecipients: parseList(document.getElementById('additional-recipients').value),
+          senderName: document.getElementById('sender-name').value.trim(),
+          monitoringEnabled: document.getElementById('monitoring-enabled').checked,
+          checkIntervalHours: Number(document.getElementById('check-interval').value),
+          activeStartHour: Number(document.getElementById('active-start').value),
+          activeEndHour: Number(document.getElementById('active-end').value),
+          includeYesterday: document.getElementById('include-yesterday').checked,
+          includeSupplements: document.getElementById('include-supplements').checked,
+          aiMode: selectedMode ? selectedMode.value : 'off',
+          summarizeHeadlines: document.getElementById('summarize-headlines').checked,
+          deliveryPolicy: document.getElementById('delivery-policy').value,
+          notifyErrors: document.getElementById('notify-errors').checked,
+          notifyNoPublication: document.getElementById('notify-no-publication').checked,
+          includeHeadlines: document.getElementById('include-headlines').checked,
+          requiredKeywords: parseList(document.getElementById('required-keywords').value),
+          excludedKeywords: parseList(document.getElementById('excluded-keywords').value),
+          preferredInstitutions: parseList(document.getElementById('preferred-institutions').value),
+          includeCorrections: document.getElementById('include-corrections').checked,
+          includeCancellations: document.getElementById('include-cancellations').checked,
+          includeUncertain: document.getElementById('include-uncertain').checked,
+          apiKey: ui.apiKey.value.trim(),
+          removeApiKey: false,
+        };
+      }
+
+      function settingsSnapshot() {
+        return JSON.stringify(collectSettings());
+      }
+
+      function updateDirtyState() {
+        if (!dashboard || busy) return;
+        const dirty = settingsSnapshot() !== cleanSnapshot;
+        ui.saveBar.hidden = !dirty;
+      }
+
+      function fillForm(settings) {
+        document.getElementById('primary-recipient').value = settings.primaryRecipient || '';
+        document.getElementById('additional-recipients').value = (settings.additionalRecipients || []).join(', ');
+        document.getElementById('sender-name').value = settings.senderName || 'Official Gazette Monitor';
+        document.getElementById('monitoring-enabled').checked = settings.monitoringEnabled === true;
+        document.getElementById('check-interval').value = String(settings.checkIntervalHours || 3);
+        document.getElementById('active-start').value = String(settings.activeStartHour ?? 6);
+        document.getElementById('active-end').value = String(settings.activeEndHour ?? 23);
+        document.getElementById('include-yesterday').checked = settings.includeYesterday === true;
+        document.getElementById('include-supplements').checked = settings.includeSupplements === true;
+        const mode = document.querySelector('input[name="ai-mode"][value="' + settings.aiMode + '"]');
+        if (mode) mode.checked = true;
+        document.getElementById('summarize-headlines').checked = settings.summarizeHeadlines === true;
+        document.getElementById('delivery-policy').value = settings.deliveryPolicy || 'matches_only';
+        document.getElementById('notify-errors').checked = settings.notifyErrors === true;
+        document.getElementById('notify-no-publication').checked = settings.notifyNoPublication === true;
+        document.getElementById('include-headlines').checked = settings.includeHeadlines === true;
+        document.getElementById('required-keywords').value = (settings.requiredKeywords || []).join(', ');
+        document.getElementById('excluded-keywords').value = (settings.excludedKeywords || []).join(', ');
+        document.getElementById('preferred-institutions').value = (settings.preferredInstitutions || []).join(', ');
+        document.getElementById('include-corrections').checked = settings.includeCorrections === true;
+        document.getElementById('include-cancellations').checked = settings.includeCancellations === true;
+        document.getElementById('include-uncertain').checked = settings.includeUncertain === true;
+        ui.apiKey.value = '';
+        updateAnalysisPanel();
+      }
+
+      function updateAnalysisPanel() {
+        const mode = document.querySelector('input[name="ai-mode"]:checked');
+        const aiOff = !mode || mode.value === 'off';
+        const hasSavedKey = Boolean(dashboard && dashboard.status.apiKeyConfigured);
+        if (aiOff) {
+          ui.apiKey.value = '';
+          ui.apiKey.type = 'password';
+          document.getElementById('toggle-key').textContent = 'Show';
+        }
+        ui.keyPanel.hidden = aiOff && !hasSavedKey;
+        ui.apiKey.disabled = aiOff;
+        document.getElementById('toggle-key').hidden = aiOff;
+        document.getElementById('test-ai').hidden = aiOff;
+        document.getElementById('remove-key').hidden = !hasSavedKey;
+        const summaryToggle = document.getElementById('summarize-headlines');
+        if (mode && mode.value === 'summary_only') summaryToggle.checked = true;
+        summaryToggle.disabled = aiOff || mode.value === 'summary_only';
+      }
+
+      function setChecklist(id, complete) {
+        const item = document.getElementById(id);
+        item.classList.toggle('done', complete);
+        item.querySelector('.check-dot').textContent = complete ? '✓' : item.id.replace('check-', '') === 'recipient' ? '1' : item.id === 'check-schedule' ? '2' : item.id === 'check-analysis' ? '3' : '4';
+      }
+
+      function renderActivity(items) {
+        const list = document.getElementById('activity-list');
+        list.replaceChildren();
+        if (!items || !items.length) {
+          const empty = document.createElement('div');
+          empty.className = 'empty-state';
+          empty.textContent = 'No checks yet. Run your first check to verify the complete workflow.';
+          list.appendChild(empty);
+          return;
+        }
+        items.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'activity-item';
+          const dot = document.createElement('span');
+          dot.className = 'activity-dot ' + (item.status || 'info');
+          const copy = document.createElement('div');
+          const title = document.createElement('div');
+          const time = document.createElement('time');
+          title.className = 'activity-title';
+          title.textContent = item.message || 'Activity recorded.';
+          time.className = 'activity-time';
+          time.dateTime = item.at || '';
+          time.textContent = formatDate(item.at);
+          copy.appendChild(title);
+          row.append(dot, copy, time);
+          list.appendChild(row);
+        });
+      }
+
+      function renderDashboard(data, refill) {
+        dashboard = data;
+        if (refill !== false) fillForm(data.settings);
+        document.getElementById('app-version').textContent = 'Version ' + data.app.version;
+        const status = document.getElementById('header-status');
+        status.className = 'status-pill';
+        if (data.status.settingsCorrupt) { status.textContent = 'Needs attention'; status.classList.add('error'); }
+        else if (!data.status.configured) { status.textContent = 'Setup required'; status.classList.add('warning'); }
+        else if (!data.status.schedulerHealthy) { status.textContent = 'Needs attention'; status.classList.add('error'); }
+        else if (!data.status.monitoringEnabled) { status.textContent = 'Monitoring paused'; status.classList.add('warning'); }
+        else { status.textContent = 'Monitoring active'; status.classList.add('success'); }
+        document.getElementById('setup-notice').hidden = data.status.configured;
+        document.getElementById('setup-notice-title').textContent = data.status.settingsCorrupt
+          ? 'Stored settings need repair'
+          : 'Complete your private setup';
+        document.getElementById('setup-notice-copy').textContent = data.status.settingsCorrupt
+          ? 'Monitoring was paused safely because the stored settings could not be read. Review this form and save to repair them.'
+          : 'Add a recipient, choose an analysis mode, then save. Credentials remain inside your Apps Script project.';
+        document.getElementById('metric-next').textContent = data.status.nextCheckLabel;
+        const lastRun = data.status.lastRun;
+        document.getElementById('metric-last').textContent = lastRun ? formatDate(lastRun.completedAt) : 'No checks yet';
+        document.getElementById('metric-last-note').textContent = lastRun ? (lastRun.found + ' issue(s), ' + lastRun.sent + ' email(s)') : 'Run a check when setup is complete';
+        document.getElementById('metric-quota').textContent = data.status.remainingEmailQuota == null ? 'Unavailable' : String(data.status.remainingEmailQuota);
+        const labels = { full: 'Full AI', summary_only: 'Summary only', off: 'Keyword mode' };
+        document.getElementById('metric-ai').textContent = labels[data.settings.aiMode] || 'Keyword mode';
+        document.getElementById('metric-ai-note').textContent = data.settings.aiMode === 'off'
+          ? 'No Gemini calls'
+          : data.status.apiKeyVerified
+            ? 'API key verified'
+            : data.status.apiKeyConfigured
+              ? 'API key verification required'
+              : 'API key required';
+        ui.keyState.textContent = data.status.apiKeyVerified
+          ? '● API key configured and verified'
+          : data.status.apiKeyConfigured
+            ? '● API key configured; verification required before AI use'
+            : 'API key not configured';
+        ui.keyState.style.color = data.status.apiKeyVerified ? 'var(--success)' : 'var(--warning)';
+        document.getElementById('remove-key').hidden = !data.status.apiKeyConfigured;
+        setChecklist('check-recipient', Boolean(data.settings.primaryRecipient));
+        setChecklist('check-schedule', data.settings.monitoringEnabled);
+        setChecklist('check-analysis', data.settings.aiMode === 'off' || data.status.apiKeyVerified);
+        setChecklist('check-health', data.status.schedulerHealthy);
+        renderActivity(data.activity);
+        cleanSnapshot = settingsSnapshot();
+        ui.saveBar.hidden = true;
+      }
+
+      async function saveSettings(showSuccess) {
+        if (!ui.form.reportValidity()) throw new Error('Complete the required fields before saving.');
+        const payload = collectSettings();
+        if (payload.activeEndHour < payload.activeStartHour) throw new Error('Active until must be later than Active from.');
+        setBusy(true, payload.apiKey ? 'Verifying the API key and saving settings…' : 'Saving settings…');
+        try {
+          const response = await rpc('saveDashboardSettings', payload);
+          const data = assertResponse(response);
+          renderDashboard(data, true);
+          if (showSuccess !== false) {
+            showToast(
+              data.status.schedulerHealthy ? 'Settings saved' : 'Schedule needs attention',
+              response.message,
+              data.status.schedulerHealthy ? 'success' : 'error'
+            );
+          }
+          return data;
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function ensureSaved() {
+        if (settingsSnapshot() !== cleanSnapshot) await saveSettings(false);
+      }
+
+      async function performAction(options) {
+        try {
+          if (options.saveFirst) await ensureSaved();
+          setBusy(true, options.loading || 'Working…');
+          const data = assertResponse(await rpc(options.method, ...(options.args || [])));
+          const updated = data && data.dashboard ? data.dashboard : data;
+          if (updated && updated.settings) renderDashboard(updated, true);
+          showToast(options.successTitle || 'Complete', options.successMessage || 'The operation completed successfully.', 'success');
+        } catch (error) {
+          showToast('Action failed', error.message, 'error');
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function load() {
+        populateHours();
+        try {
+          const data = assertResponse(await rpc('getDashboardState'));
+          renderDashboard(data, true);
+        } catch (error) {
+          document.getElementById('header-status').textContent = 'Unable to load';
+          showToast('Dashboard unavailable', error.message, 'error');
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      ui.form.addEventListener('input', updateDirtyState);
+      ui.form.addEventListener('change', (event) => { if (event.target.name === 'ai-mode') updateAnalysisPanel(); updateDirtyState(); });
+      ui.form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try { await saveSettings(true); } catch (error) { setBusy(false); showToast('Settings not saved', error.message, 'error'); }
+      });
+      document.getElementById('discard-settings').addEventListener('click', () => { fillForm(dashboard.settings); cleanSnapshot = settingsSnapshot(); ui.saveBar.hidden = true; });
+      document.getElementById('toggle-key').addEventListener('click', () => { const show = ui.apiKey.type === 'password'; ui.apiKey.type = show ? 'text' : 'password'; document.getElementById('toggle-key').textContent = show ? 'Hide' : 'Show'; document.getElementById('toggle-key').setAttribute('aria-label', show ? 'Hide API key' : 'Show API key'); });
+      document.getElementById('test-email').addEventListener('click', () => performAction({ method: 'testRecipientEmail', saveFirst: true, loading: 'Sending a private test email…', successTitle: 'Email verified', successMessage: 'The test message was sent to your saved recipients.' }));
+      document.getElementById('test-ai').addEventListener('click', () => performAction({ method: 'testAiConnection', saveFirst: true, loading: 'Testing the Gemini connection…', successTitle: 'AI verified', successMessage: 'Gemini returned the expected structured response.' }));
+      ['check-now', 'side-check'].forEach((id) => document.getElementById(id).addEventListener('click', () => performAction({ method: 'runCheckNow', saveFirst: true, loading: 'Checking today’s Official Gazette…', successTitle: 'Check complete', successMessage: 'The latest publication state has been processed.' })));
+      document.getElementById('repair-scheduler').addEventListener('click', () => performAction({ method: 'repairScheduler', saveFirst: true, loading: 'Repairing the private scheduler…', successTitle: 'Schedule repaired' }));
+      document.getElementById('clear-cache').addEventListener('click', () => { if (window.confirm('Clear the AI analysis cache? Matching documents will be analyzed again.')) performAction({ method: 'clearAnalysisCache', args: ['CLEAR_ANALYSIS_CACHE'], loading: 'Clearing the analysis cache…', successTitle: 'Cache cleared' }); });
+      document.getElementById('clear-history').addEventListener('click', () => { if (window.confirm('Clear processed-publication history? Previously seen issues may be emailed again.')) performAction({ method: 'clearProcessedHistory', args: ['CLEAR_PROCESSED_HISTORY'], loading: 'Clearing processed history…', successTitle: 'History cleared' }); });
+      document.getElementById('remove-key').addEventListener('click', () => { if (window.confirm('Remove the saved Gemini API key? AI must be disabled first.')) performAction({ method: 'clearAiKey', args: ['REMOVE_GEMINI_KEY'], saveFirst: true, loading: 'Removing the saved API key…', successTitle: 'API key removed' }); });
+
+      load();
+    </script>
+  </body>
+</html>

@@ -4,148 +4,203 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Google Apps Script](https://img.shields.io/badge/Google%20Apps%20Script-V8-4285F4)](https://script.google.com/)
 
-A serverless Google Apps Script that monitors Türkiye's Official Gazette, finds academic recruitment notices, uses Gemini to identify research-assistant vacancies, and emails a structured daily report.
+A private, serverless monitoring workspace for academic recruitment notices in Türkiye's Official Gazette. It discovers regular and supplemental issues, optionally uses Gemini to extract research-assistant vacancies, and sends configurable email alerts.
 
-It is designed for a single user who wants a dependable alert without running a server or storing a Gmail password.
+Version 2 adds a polished web dashboard, optional AI, flexible scheduling, multiple recipients, relevance filters, activity history, and safe maintenance controls.
 
-## What it does
+## Product boundary
 
-- Checks the Official Gazette several times per day in the `Europe/Istanbul` time zone.
-- Discovers both the regular issue and every supplemental issue listed for that date.
-- Verifies the requested date and exact PDF filename to prevent the Gazette website's date fallback from producing a false match.
-- Lists the issue headlines and links to the official PDF.
-- Opens the **Miscellaneous Notices** index and reviews its linked PDFs for academic recruitment.
-- Uses Gemini structured output to extract research-assistant positions, institutions, units, requirements, deadlines, and evidence.
-- Sends an HTML and plain-text email report.
-- Deduplicates processed issues and retries when an issue is published late.
-- Preserves source links and places uncertain or failed analyses in a prominent manual-review section.
+This repository is a **self-hosted, single-tenant Apps Script application**. Each user deploys a private copy under their own Google account and owns their own configuration, Gemini key, email quota, and triggers.
 
-The email is written in English. Official institution names, qualifications, and evidence may remain in Turkish so that legally significant wording is not mistranslated.
+It must be deployed with:
+
+- **Execute as:** Me
+- **Who has access:** Only myself
+
+Do not expose this version as an anonymous or shared multi-user web app. A centralized commercial SaaS requires separate identity, database, secrets, billing, and scheduler infrastructure. See [Commercial architecture](docs/COMMERCIALIZATION.md).
+
+## Dashboard capabilities
+
+- Private, responsive setup and operations dashboard.
+- Primary recipient plus two optional additional recipients delivered by BCC for address privacy.
+- Custom sender name and delivery policy.
+- Monitoring every 1, 2, 3, 4, 6, 8, 12, or 24 hours.
+- Configurable active-hours window in `Europe/Istanbul`.
+- Pause/resume monitoring without deleting configuration.
+- Previous-day backfill and supplemental-issue controls.
+- Three analysis modes:
+
+  | Mode | Gemini key | Headline summary | PDF vacancy extraction |
+  | --- | --- | --- | --- |
+  | Full AI | Required | Optional | Yes |
+  | Summary only | Required | Yes | No; candidate links require review |
+  | Keyword mode | Not required | Deterministic | No; likely academic links require review |
+
+- Required/excluded keyword and preferred-institution filters.
+- Correction, cancellation, uncertainty, and headline preferences.
+- Test email and Gemini connection actions.
+- Remaining email quota, scheduler health, last-run summary, and recent activity.
+- Explicit controls for cache, processed history, scheduler repair, and API-key removal.
+
+## Monitoring capabilities
+
+- Verifies the requested date and exact PDF filename to reject the Official Gazette website's silent date fallback.
+- Discovers the regular issue and every supplemental issue listed on the official daily page.
+- Prioritizes the **Miscellaneous Notices** index before applying the headline limit.
+- Reviews all linked notice PDFs in Full AI mode instead of relying only on link-title keywords.
+- Uses Gemini structured output to extract institution, unit, department, count, grade, ALES, language requirement, special conditions, deadline, method, evidence, and source page.
+- Preserves official source links and never trusts AI-generated URLs.
+- Degrades to manual-review links when AI, parsing, quota, document-size, or execution-time limits prevent a reliable result.
+- Deduplicates processed issues, caches document analysis, and checks the previous day for late publications.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    A["Time-driven Apps Script triggers"] --> B["Official Gazette daily page"]
-    B --> C["Regular and supplemental issues"]
-    C --> D["Headlines and official issue PDF"]
-    C --> E["Miscellaneous Notices index"]
-    E --> F["Linked notice PDFs"]
-    F --> G["Gemini structured analysis"]
-    D --> H["HTML and plain-text report"]
-    G --> H
-    H --> I["Recipient email via MailApp"]
-    J["Script Properties"] --> A
-    J --> G
-    J --> I
+    A["Private Apps Script dashboard"] --> B["Versioned settings"]
+    B --> C["Single hourly scheduler"]
+    C --> D["Interval and active-hours gate"]
+    D --> E["Official Gazette daily page"]
+    E --> F["Regular and supplemental issues"]
+    F --> G["Headlines and official PDF"]
+    F --> H["Miscellaneous Notices PDFs"]
+    H --> I{"Analysis mode"}
+    I -->|"Full AI"| J["Gemini structured extraction"]
+    I -->|"Summary only / Off"| K["Keyword and manual-review links"]
+    G --> L["HTML and plain-text report"]
+    J --> L
+    K --> L
+    L --> M["Saved recipients via MailApp"]
 ```
 
-## Why Google Apps Script
+Secrets remain separate from non-secret preferences:
 
-Apps Script provides scheduled execution, outbound HTTP requests, and email delivery under your Google account. There is no server to deploy and no Gmail password or app password to store. The workload is small enough to fit comfortably within typical Apps Script quotas.
+- `GEMINI_API_KEY`: stored separately and never returned to the browser.
+- `RECIPIENT_EMAIL`: legacy-compatible primary recipient property.
+- `RG_SETTINGS_V2`: versioned non-secret preferences.
+- Runtime state, activity, processed publications, and analysis cache use independent properties.
 
 ## Requirements
 
 - A Google account.
-- A Gemini Developer API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-- Approximately five minutes for initial setup.
+- A private Google Apps Script project.
+- A Gemini Developer API key only for **Full AI** or **Summary only** mode.
 
-> A Google AI Pro subscription and Gemini Developer API usage are separate products. An API key is still required, and API usage follows the project's own free or paid quota. See [Gemini API billing](https://ai.google.dev/gemini-api/docs/billing).
+> Google AI Pro and the Gemini Developer API are separate products. An AI Pro subscription does not remove the need for a Developer API key. API usage follows the associated project's free or paid quota. See [Gemini API billing](https://ai.google.dev/gemini-api/docs/billing).
 
-## Setup
+## Quick start
 
-1. Open [Google Apps Script](https://script.google.com/) and create a **New project**.
-2. Open the default script file and replace its contents with [Code.gs](Code.gs).
-3. Open **Project Settings** and set the time zone to **(GMT+03:00) Europe/Istanbul**.
-4. Under **Script Properties**, add these two properties:
+1. Open [Google Apps Script](https://script.google.com/) and create a new project.
+2. Add the repository files to the project:
 
-   | Property | Value |
-   | --- | --- |
-   | `GEMINI_API_KEY` | A dedicated Gemini Developer API key |
-   | `RECIPIENT_EMAIL` | The email address that should receive reports |
+   - `Code.gs`
+   - `WebApp.gs`
+   - `Index.html` as an HTML file named `Index`
+   - `appsscript.json` when using `clasp`
 
-5. Select the `setup` function and click **Run**.
-6. Review and approve the requested permissions for external requests, sending email, and managing time-driven triggers. If Google shows an unverified-app warning for the Apps Script project you created yourself, continue only after confirming the displayed project name and URL are yours.
-7. Select `checkTodayNow` and click **Run** to request the first live report immediately.
+3. Set the project time zone to **(GMT+03:00) Europe/Istanbul**.
+4. Choose **Deploy → New deployment → Web app**.
+5. Select **Execute as me** and **Only myself**, authorize the requested scopes, and deploy.
+6. Open the deployment URL, complete the dashboard, and save.
+7. Use **Send test email**, **Test AI connection** when applicable, and **Check now**.
 
-No web-app deployment is required. The `setup` function validates the Gemini connection, creates the schedule, and sends a setup confirmation email.
+The dashboard creates exactly one hourly scheduler and enforces the chosen interval and active window in code. Apps Script trigger times are approximate.
 
-## Schedule and delivery behavior
+For a complete production checklist, upgrades, and troubleshooting, read [Deployment guide](docs/DEPLOYMENT.md).
 
-The default schedule checks at approximately `06:15`, `09:15`, `12:15`, `15:15`, `18:15`, `21:15`, and `23:15` Istanbul time. Apps Script may shift time-driven triggers by several minutes.
+## Backward compatibility
 
-Each run checks both today and yesterday. This catches late publications and supplemental issues while processed-publication state prevents duplicate emails. If no issue exists by the final daily check, the app sends a single informational notice.
+Existing version 1 installations continue to work:
 
-The full Official Gazette PDF is linked rather than attached, which avoids email attachment limits. Relevant recruitment PDFs are analyzed individually.
+- A stored `RECIPIENT_EMAIL` is imported as the primary recipient.
+- A stored `GEMINI_API_KEY` selects Full AI mode; the dashboard verifies it on the first AI-enabled save before marking setup complete.
+- Processed-publication state and the existing analysis cache are retained.
+- Saving the dashboard replaces the former fixed trigger set with one hourly scheduler.
 
-## Available functions
+The legacy `setup()` function remains available, but new installations should use the dashboard.
+
+## Public Apps Script functions
 
 | Function | Purpose |
 | --- | --- |
-| `setup` | Validates configuration, tests Gemini, creates triggers, and sends a confirmation email |
-| `checkTodayNow` | Checks today's publications without resending completed issues |
-| `resendToday` | Reanalyzes and resends today's publications, bypassing deduplication and cache |
-| `refreshTriggers` | Recreates all scheduled checks |
-| `removeTriggers` | Removes this project's scheduled checks |
-| `showStatus` | Prints a secret-safe configuration and processing summary |
-| `scheduledCheck` | Trigger entry point; normally not run manually |
-
-## Reliability safeguards
-
-- Exact issue-date and PDF-basename validation.
-- Discovery of supplemental issues from the official daily page instead of guessing their count.
-- Broad review of all PDFs in the Miscellaneous Notices index to reduce false negatives.
-- Deterministic source URLs; AI-generated URLs are never trusted.
-- JSON-schema validation and normalized AI output.
-- Manual-review fallback when a document is too large, cannot be downloaded, exceeds the execution budget, or produces uncertain analysis.
-- A global run-time budget and a safety buffer before starting new network calls.
-- Best-effort, size-aware analysis caching that cannot invalidate an otherwise successful result.
-- State retention and script locking to prevent duplicate concurrent delivery.
+| `doGet` | Serves the private dashboard |
+| `getDashboardState` | Returns sanitized settings, health, quota, and activity |
+| `saveDashboardSettings` | Validates and saves preferences, optionally verifies a new AI key, and reconciles the scheduler |
+| `testRecipientEmail` | Sends a test only to saved recipients |
+| `testAiConnection` | Verifies the stored Gemini key |
+| `runCheckNow` | Runs an immediate check from the dashboard |
+| `repairScheduler` | Reconciles missing or duplicate scheduler triggers |
+| `clearProcessedHistory` | Clears deduplication history after explicit confirmation |
+| `clearAnalysisCache` | Clears cached AI analyses after explicit confirmation |
+| `clearAiKey` | Removes the AI key only while AI is disabled |
+| `setup` | Backward-compatible initializer for editor-based installations |
+| `scheduledCheck` | Installable-trigger entry point |
+| `checkTodayNow` | Editor-based immediate check |
+| `resendToday` | Reanalyzes and resends today's issue |
+| `showStatus` | Logs a secret-safe operational summary |
 
 ## Security and privacy
 
-- Never commit `GEMINI_API_KEY` or `RECIPIENT_EMAIL`.
-- Keep the Apps Script project private and limit it to one trusted editor. Script Properties are configuration storage, not a dedicated secrets vault; project editors can read them.
-- Create a dedicated API key and restrict it to the Gemini API. See [API key best practices](https://ai.google.dev/gemini-api/docs/api-key).
-- The API key is sent in the `x-goog-api-key` header, not in a URL.
-- Only `https://www.resmigazete.gov.tr` source links are rendered in outgoing email.
-- Official Gazette documents are public. If you later add CVs, personal profiles, or private filters, review Gemini's data-use terms first. Google states that free-tier and paid-tier data handling can differ.
+- Never commit a Gemini key, recipient address, deployment URL, or `.clasp.json`.
+- Never deploy this single-tenant version to anonymous or broad access.
+- Keep the Apps Script project private and limit editor access. Script Properties are configuration storage, not a dedicated secrets vault; project editors can read them.
+- The API key is sent in the `x-goog-api-key` header and is never returned by dashboard endpoints.
+- Dashboard values are rendered with safe text operations, not dynamic HTML.
+- Server endpoints validate full payloads, reject unknown settings, cap list sizes, and use optimistic revisions to prevent two tabs from silently overwriting each other.
+- Email tests can target only saved recipients, preventing the endpoint from becoming an arbitrary mail relay.
+- Only `https://www.resmigazete.gov.tr` source links are rendered in reports.
+- Official Gazette documents are public. Do not add CVs or personal profiles without reviewing the selected Gemini tier's data-use terms.
 
-See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+Read [SECURITY.md](SECURITY.md) before deployment.
 
-## Quotas and cost
+## Reliability and quota behavior
 
-The app uses Gemini once per candidate document, up to 30 documents per issue, plus one optional headline-summary request. Free-tier availability and rate limits vary by model and project; consult the **Rate Limits** page in Google AI Studio.
+- One hourly trigger remains well below the Apps Script per-user trigger limit.
+- Interval gating avoids running the full monitor every hour when a longer interval is selected.
+- A global deadline prevents new network calls near the Apps Script execution limit.
+- Email quota is checked against the number of recipients, not only the number of messages.
+- Full AI mode permits up to 30 candidate documents plus one optional headline-summary request per new issue.
+- AI failure creates manual-review entries instead of claiming that no vacancy exists.
+- Analysis cache keys include the model and prompt version so incompatible results are not silently reused.
 
-Apps Script consumer quotas currently include daily URL Fetch and email-recipient limits as well as a per-execution time limit. The default schedule and run-time guard are designed around those limits. Always confirm the latest values in the official [Apps Script quotas](https://developers.google.com/apps-script/guides/services/quotas) documentation.
+Always confirm current limits in the official [Apps Script quotas](https://developers.google.com/apps-script/guides/services/quotas) and Gemini project **Rate Limits** pages.
 
 Relevant documentation:
 
+- [Apps Script web apps](https://developers.google.com/apps-script/guides/web)
+- [HTML Service communication](https://developers.google.com/apps-script/guides/html/communication)
 - [Installable triggers](https://developers.google.com/apps-script/guides/triggers/installable)
 - [MailApp](https://developers.google.com/apps-script/reference/mail/mail-app)
+- [Properties Service](https://developers.google.com/apps-script/reference/properties)
 - [Gemini document processing](https://ai.google.dev/gemini-api/docs/document-processing)
-- [Gemini models](https://ai.google.dev/gemini-api/docs/models)
+- [Gemini API key guidance](https://ai.google.dev/gemini-api/docs/api-key)
 - [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)
 
 ## Development
 
-The production app has no package dependencies. Node.js is used only to run the local parser and integration tests.
+Production uses no package dependency or third-party UI CDN. Node.js is required only for local tests.
 
 ```bash
 npm test
 ```
 
-The integration test runs the Apps Script code inside a mocked environment and verifies issue discovery, notice analysis, Gemini request shape, email generation, deduplication, forced resend, and manual-review behavior.
+The test suite covers:
 
-## Limitations and disclaimer
+- Official Gazette parsing and exact-date safety.
+- Supplemental-issue discovery.
+- Full AI integration, request shape, email output, and deduplication.
+- Version 1 migration and versioned dashboard settings.
+- Optional-AI keyword mode and secret non-disclosure.
+- Recipient restrictions and scheduler reconciliation.
+- Dashboard client syntax, required controls, accessibility markers, and unsafe-rendering regressions.
 
-This project is an alerting aid, not a legal source or an employment decision system. AI output can be incomplete or incorrect. Always open the linked official notice and verify requirements, dates, and application instructions before acting.
+## Disclaimer
 
-The Official Gazette website is an external service and may change its HTML structure. A parsing failure is surfaced for manual review, but maintainers should update the parser and fixtures when the source changes.
+This project is an independent alerting aid, not a legal source, official government service, or employment decision system. AI and keyword results can be incomplete or incorrect. Always open the linked official notice and verify requirements, dates, corrections, cancellations, and application instructions before acting.
 
 ## Contributing
 
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), add or update tests, and open a focused pull request.
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), update tests and documentation, and open a focused pull request.
 
 ## License
 
