@@ -12,6 +12,7 @@ import {
   type AcademicCandidate,
   type GazettePublication,
 } from "./parser";
+import { officialGazetteFetch } from "./transport";
 
 export type FetchImplementation = (
   input: string | URL | Request,
@@ -66,7 +67,7 @@ export class OfficialGazetteCollector {
   private readonly userAgent: string;
 
   constructor(options: CollectorOptions = {}) {
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? officialGazetteFetch;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.maxHtmlBytes = options.maxHtmlBytes ?? DEFAULT_MAX_HTML_BYTES;
     this.maxPdfBytes = options.maxPdfBytes ?? DEFAULT_MAX_PDF_BYTES;
