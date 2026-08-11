@@ -1,0 +1,19 @@
+# Apps Script local tooling
+.clasp.json
+.clasprc.json
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Node and test output
+node_modules/
+coverage/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,13 @@
+{
+  "name": "turkish-official-gazette-academic-alerts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serverless Official Gazette monitoring and Gemini-powered research-assistant vacancy alerts.",
+  "scripts": {
+    "test": "node tests/test_parser.js && node tests/test_integration.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
